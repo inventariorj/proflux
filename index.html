@@ -1,0 +1,2599 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ProFlux - Gestão Operacional de Propostas, Pedidos e Produção</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Phosphor Icons CDN -->
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <!-- SheetJS (xlsx) para importação e exportação em Excel -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-warm: #f2f7f3;
+      --border-grid: #133320;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg-warm);
+      color: #0b2214;
+      background-image: 
+        radial-gradient(#15803d14 1px, transparent 1px),
+        radial-gradient(#f9731610 1px, var(--bg-warm) 1px);
+      background-size: 36px 36px;
+      background-position: 0 0, 18px 18px;
+    }
+
+    /* Animações industriais de engrenagem */
+    @keyframes gear-spin-cw {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    @keyframes gear-spin-ccw {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(-360deg); }
+    }
+    @keyframes pulse-subtle {
+      0%, 100% { transform: scale(1); opacity: 0.9; }
+      50% { transform: scale(1.04); opacity: 1; }
+    }
+
+    .animate-gear-slow {
+      animation: gear-spin-cw 34s linear infinite;
+    }
+    .animate-gear-reverse {
+      animation: gear-spin-ccw 26s linear infinite;
+    }
+    .animate-industrial-pulse {
+      animation: pulse-subtle 4s ease-in-out infinite;
+    }
+
+    /* Scrollbar personalizada em Verde & Laranja */
+    ::-webkit-scrollbar {
+      width: 9px;
+      height: 9px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #e2ede4;
+      border-radius: 6px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: linear-gradient(180deg, #10b981, #f97316);
+      border-radius: 6px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, #059669, #ea580c);
+    }
+
+    /* Divisórias reforçadas de alto contraste (2.5px) */
+    .table-grid {
+      border-collapse: collapse !important;
+      border: 2.5px solid #133320 !important;
+      width: 100%;
+    }
+    .table-grid th {
+      border: 2.5px solid #133320 !important;
+      background: linear-gradient(180deg, #e4eee6 0%, #d8e8dc 100%) !important;
+      color: #082415 !important;
+      font-weight: 800 !important;
+      letter-spacing: 0.03em;
+    }
+    .table-grid td {
+      border: 2.5px solid #376348 !important;
+      background-color: #fcfdfc;
+      padding-top: 8px !important;
+      padding-bottom: 8px !important;
+    }
+    .table-grid tbody tr:nth-child(even) td {
+      background-color: #f1f8f3;
+    }
+    .table-grid tbody tr:hover td {
+      background-color: #fef3c7 !important; /* Destaque sutil âmbar/laranja ao passar o mouse */
+    }
+    .table-grid input[type="date"],
+    .table-grid input[type="text"],
+    .table-grid input[type="number"] {
+      border-width: 1.5px !important;
+      border-color: #497d5d !important;
+      font-weight: 600 !important;
+      background-color: #ffffff;
+    }
+    .table-grid input:focus {
+      border-color: #f97316 !important;
+      outline: none;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased relative">
+
+  <!-- ==================== TELA DE ENTRADA OBRIGATÓRIA (LOGIN INDUSTRIAL) ==================== -->
+  <div id="authGateScreen" class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-gradient-to-br from-emerald-950 via-[#0a2717] to-[#1a1c18] overflow-hidden">
+    
+    <!-- Arte Vetorial de Fundo Industrial com Engrenagens e Tubulações Animadas -->
+    <div class="absolute inset-0 pointer-events-none overflow-hidden opacity-35">
+      <!-- Engrenagem Grande (Verde Esmeralda) -->
+      <svg class="absolute -top-24 -left-24 w-96 h-96 text-emerald-600/30 animate-gear-slow" viewBox="0 0 100 100" fill="currentColor">
+        <path d="M50 35a15 15 0 1 0 0 30 15 15 0 0 0 0-30zm0-35c-2.4 0-4.7.2-7 .6l-2.2 7.7c-2.6.9-5.1 2-7.4 3.4L26 8c-3.7 2.2-7 4.9-9.8 8.1l4 6.8c-1.8 2.1-3.3 4.4-4.5 7L7.9 32C7.3 34.3 7 36.6 7 39s.3 4.7.9 7l7.8 2.1c1.2 2.6 2.7 4.9 4.5 7l-4 6.8c2.8 3.2 6.1 5.9 9.8 8.1l7.4-3.7c2.3 1.4 4.8 2.5 7.4 3.4l2.2 7.7c2.3.4 4.6.6 7 .6s4.7-.2 7-.6l2.2-7.7c2.6-.9 5.1-2 7.4-3.4L74 92c3.7-2.2 7-4.9 9.8-8.1l-4-6.8c1.8-2.1 3.3-4.4 4.5-7l7.8-2.1c.6-2.3.9-4.6.9-7s-.3-4.7-.9-7l-7.8-2.1c-1.2-2.6-2.7-4.9-4.5-7l4-6.8c-2.8-3.2-6.1-5.9-9.8-8.1l-7.4 3.7c-2.3-1.4-4.8-2.5-7.4-3.4L57 5.6C54.7 5.2 52.4 5 50 5z"/>
+      </svg>
+
+      <!-- Engrenagem Acoplada (Laranja Industrial) -->
+      <svg class="absolute -bottom-28 -right-28 w-[440px] h-[440px] text-orange-500/25 animate-gear-reverse" viewBox="0 0 100 100" fill="currentColor">
+        <path d="M50 35a15 15 0 1 0 0 30 15 15 0 0 0 0-30zm0-35c-2.4 0-4.7.2-7 .6l-2.2 7.7c-2.6.9-5.1 2-7.4 3.4L26 8c-3.7 2.2-7 4.9-9.8 8.1l4 6.8c-1.8 2.1-3.3 4.4-4.5 7L7.9 32C7.3 34.3 7 36.6 7 39s.3 4.7.9 7l7.8 2.1c1.2 2.6 2.7 4.9 4.5 7l-4 6.8c2.8 3.2 6.1 5.9 9.8 8.1l7.4-3.7c2.3 1.4 4.8 2.5 7.4 3.4l2.2 7.7c2.3.4 4.6.6 7 .6s4.7-.2 7-.6l2.2-7.7c2.6-.9 5.1-2 7.4-3.4L74 92c3.7-2.2 7-4.9 9.8-8.1l-4-6.8c1.8-2.1 3.3-4.4 4.5-7l7.8-2.1c.6-2.3.9-4.6.9-7s-.3-4.7-.9-7l-7.8-2.1c-1.2-2.6-2.7-4.9-4.5-7l4-6.8c-2.8-3.2-6.1-5.9-9.8-8.1l-7.4 3.7c-2.3-1.4-4.8-2.5-7.4-3.4L57 5.6C54.7 5.2 52.4 5 50 5z"/>
+      </svg>
+
+      <!-- Tubulação e Linhas de Fluxo Fabril -->
+      <svg class="absolute top-1/4 right-10 w-80 h-80 text-emerald-400/15" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="6 6">
+        <path d="M 10 10 L 80 10 C 120 10 120 80 160 80 L 260 80 C 300 80 300 160 340 160 L 400 160" />
+        <path d="M 40 40 L 110 40 C 150 40 150 110 190 110 L 290 110" />
+        <circle cx="120" cy="80" r="8" fill="#f97316" fill-opacity="0.3" />
+        <circle cx="300" cy="160" r="10" fill="#10b981" fill-opacity="0.3" />
+      </svg>
+    </div>
+
+    <!-- Card de Login Industrial (Mesclando Verde Floresta e Laranja Chama) -->
+    <div class="relative z-10 w-full max-w-md bg-[#0f2a1b]/95 border-2 border-emerald-500/40 rounded-3xl shadow-2xl p-7 sm:p-9 backdrop-blur-xl space-y-6">
+      
+      <!-- Topo do Card de Login: Ícone Industrial e Marca -->
+      <div class="text-center space-y-2">
+        <div class="inline-flex p-3 rounded-2xl bg-gradient-to-tr from-emerald-600 via-teal-700 to-orange-500 text-white shadow-xl shadow-orange-500/20 animate-industrial-pulse">
+          <i class="ph-bold ph-factory text-3xl"></i>
+        </div>
+        <h1 class="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center justify-center gap-1.5">
+          <span>Pro</span><span class="text-orange-400">Flux</span>
+        </h1>
+        <p class="text-xs text-emerald-200/70 pt-1">
+          Informe seu e-mail e senha credenciados para acessar o sistema
+        </p>
+      </div>
+
+      <!-- Formulário com Inputs Limpos (Sem nomes salvos visíveis) -->
+      <form id="gateLoginForm" autocomplete="off" class="space-y-4">
+        
+        <!-- Campo E-mail -->
+        <div class="space-y-1.5">
+          <label for="gateInputEmail" class="block text-xs font-bold text-emerald-200 flex items-center gap-1.5">
+            <i class="ph-bold ph-envelope-simple text-orange-400 text-sm"></i>
+            E-mail Cadastrado
+          </label>
+          <div class="relative">
+            <input 
+              type="email" 
+              id="gateInputEmail" 
+              required
+              autocomplete="off"
+              placeholder="Digite seu e-mail corporativo" 
+              class="w-full px-4 py-3 bg-emerald-950/80 border-2 border-emerald-600/50 rounded-xl text-white placeholder-emerald-400/40 text-xs sm:text-sm font-semibold focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/30 transition-all">
+          </div>
+        </div>
+
+        <!-- Campo Senha com Olhinho Alternador -->
+        <div class="space-y-1.5">
+          <label for="gateInputPassword" class="block text-xs font-bold text-emerald-200 flex items-center gap-1.5">
+            <i class="ph-bold ph-key text-orange-400 text-sm"></i>
+            Senha de Acesso
+          </label>
+          <div class="relative">
+            <input 
+              type="password" 
+              id="gateInputPassword" 
+              required
+              autocomplete="new-password"
+              placeholder="Digite sua senha" 
+              class="w-full pl-4 pr-11 py-3 bg-emerald-950/80 border-2 border-emerald-600/50 rounded-xl text-white placeholder-emerald-400/40 text-xs sm:text-sm font-semibold focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/30 transition-all">
+            
+            <!-- Botão Olhinho para Conferir Senha -->
+            <button 
+              type="button" 
+              id="btnToggleGatePassword" 
+              class="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-400 hover:text-orange-400 p-1.5 rounded-lg transition-colors focus:outline-none"
+              title="Mostrar / Ocultar Senha"
+              aria-label="Alternar visibilidade da senha">
+              <i id="gatePasswordEyeIcon" class="ph-bold ph-eye text-lg"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Alerta de Erro de Login -->
+        <div id="gateLoginError" class="hidden p-3 rounded-xl bg-orange-950/80 border border-orange-500/60 text-orange-200 text-xs font-bold flex items-center gap-2">
+          <i class="ph-bold ph-warning-circle text-base text-orange-400 shrink-0"></i>
+          <span id="gateLoginErrorText">E-mail ou senha incorretos.</span>
+        </div>
+
+        <!-- Botão Entrar Laranja / Esmeralda -->
+        <button 
+          type="submit" 
+          class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-600 hover:to-amber-600 text-slate-950 font-black text-sm tracking-wide shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 transition-all flex items-center justify-center gap-2 active:scale-[0.99]">
+          <i class="ph-bold ph-sign-in text-lg"></i>
+          <span>Entrar no Sistema</span>
+        </button>
+
+      </form>
+
+      <!-- Rodapé do Card -->
+      <div class="text-center pt-2 border-t border-emerald-900/60">
+        <p class="text-[11px] text-emerald-400/60 flex items-center justify-center gap-1">
+          <i class="ph-bold ph-shield-check text-orange-400"></i>
+          <span>Ambiente Protegido ProFlux • Liberação & Controle</span>
+        </p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ==================== CABEÇALHO PROFLUX (VERDE ESMERALDA COM TOQUES LARANJA) ==================== -->
+  <header class="bg-[#fcfdfc] border-b-2 border-emerald-800/20 sticky top-0 z-30 shadow-sm backdrop-blur-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+      
+      <!-- Logo ProFlux com atalho Home integrado -->
+      <button id="logoHomeBtn" class="flex items-center gap-3 text-left focus:outline-none group transition-transform hover:scale-[1.01]" title="Ir para a Tela Inicial">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-700 via-teal-800 to-orange-600 flex items-center justify-center text-white shadow-md shadow-emerald-700/20 group-hover:shadow-orange-500/40 transition-shadow">
+          <i class="ph-bold ph-lightning text-xl group-hover:text-orange-200 transition-colors"></i>
+        </div>
+        <div>
+          <h1 class="text-lg font-black text-emerald-950 leading-tight">
+            Pro<span class="text-orange-600 group-hover:text-orange-500 transition-colors">Flux</span>
+          </h1>
+          <p class="text-xs text-emerald-800/80 font-medium">Gestão de Propostas, Pedidos e Produção</p>
+        </div>
+      </button>
+
+      <!-- Menu do Usuário (Dropdown com Meu Perfil, Configurações e Sair) -->
+      <div class="flex items-center gap-2">
+        <div class="relative">
+          <button id="userDropdownTrigger" class="flex items-center gap-2.5 p-1.5 px-3 rounded-xl border-2 border-emerald-300 hover:border-orange-400 hover:bg-orange-50/50 bg-white transition-all shadow-xs">
+            <div id="userAvatarContainer" class="w-8 h-8 rounded-lg overflow-hidden bg-gradient-to-tr from-emerald-200 to-orange-200 text-emerald-900 font-extrabold flex items-center justify-center text-xs shrink-0 border border-emerald-300">
+              <span id="userAvatarText">AD</span>
+              <img id="userAvatarImg" src="" alt="Avatar" class="w-full h-full object-cover hidden">
+            </div>
+            <div class="hidden sm:block text-left text-xs leading-tight">
+              <span id="userNameDisplay" class="font-extrabold block text-emerald-950 max-w-[130px] truncate">Administrador</span>
+              <span id="userRoleBadge" class="text-[10px] text-orange-600 uppercase font-black tracking-wider">ADMIN</span>
+            </div>
+            <i class="ph-bold ph-caret-down text-emerald-700 text-xs"></i>
+          </button>
+          
+          <!-- Dropdown Flutuante -->
+          <div id="userDropdownMenu" class="hidden absolute right-0 mt-2 w-60 bg-white rounded-2xl shadow-2xl border-2 border-emerald-200 py-1.5 z-40 text-xs divide-y divide-emerald-100">
+            <div class="px-3.5 py-2.5 bg-gradient-to-r from-emerald-50/70 to-orange-50/50">
+              <p class="font-extrabold text-emerald-950 truncate" id="dropdownUserName">Administrador</p>
+              <p class="text-[11px] text-emerald-700/80 truncate" id="dropdownUserEmail">admin@proflux.com</p>
+              <span id="dropdownRolePill" class="inline-block mt-1 px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-orange-100 text-orange-900 border border-orange-300">
+                Acesso Total (Admin)
+              </span>
+            </div>
+            
+            <div class="py-1">
+              <button id="btnOpenProfileModal" class="w-full text-left px-3.5 py-2 text-emerald-950 hover:bg-emerald-50 hover:text-emerald-800 flex items-center gap-2.5 font-bold transition-colors">
+                <i class="ph-bold ph-user-circle text-base text-emerald-600"></i>
+                <span>Meu Perfil & Acessos</span>
+              </button>
+              <button id="btnOpenConfigModalFromDropdown" class="w-full text-left px-3.5 py-2 text-emerald-950 hover:bg-orange-50 hover:text-orange-700 flex items-center gap-2.5 font-bold transition-colors">
+                <i class="ph-bold ph-gear text-base text-orange-600"></i>
+                <span>Configurações do Sistema</span>
+              </button>
+            </div>
+
+            <div class="py-1">
+              <button id="btnLogout" class="w-full text-left px-3.5 py-2 text-rose-600 hover:bg-rose-50 flex items-center gap-2.5 font-bold transition-colors">
+                <i class="ph-bold ph-sign-out text-base"></i>
+                <span>Encerrar Sessão (Sair)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+
+    <!-- ==================== TELA 1: HOME (VERDE ESMERALDA COM TOQUES LARANJA) ==================== -->
+    <div id="viewHome" class="space-y-6">
+      
+      <!-- Banner com Gradiente Verde Floresta e Laranja Industrial -->
+      <div class="bg-gradient-to-br from-emerald-900 via-emerald-800 to-[#1e3424] rounded-3xl p-6 sm:p-8 text-white shadow-xl border-2 border-emerald-700/50 relative overflow-hidden">
+        
+        <!-- Elementos Vetoriais no Banner (Engrenagem decorativa sutil) -->
+        <svg class="absolute -right-12 -bottom-12 w-64 h-64 text-orange-500/10 pointer-events-none animate-gear-slow" viewBox="0 0 100 100" fill="currentColor">
+          <path d="M50 35a15 15 0 1 0 0 30 15 15 0 0 0 0-30zm0-35c-2.4 0-4.7.2-7 .6l-2.2 7.7c-2.6.9-5.1 2-7.4 3.4L26 8c-3.7 2.2-7 4.9-9.8 8.1l4 6.8c-1.8 2.1-3.3 4.4-4.5 7L7.9 32C7.3 34.3 7 36.6 7 39s.3 4.7.9 7l7.8 2.1c1.2 2.6 2.7 4.9 4.5 7l-4 6.8c2.8 3.2 6.1 5.9 9.8 8.1l7.4-3.7c2.3 1.4 4.8 2.5 7.4 3.4l2.2 7.7c2.3.4 4.6.6 7 .6s4.7-.2 7-.6l2.2-7.7c2.6-.9 5.1-2 7.4-3.4L57 5.6C54.7 5.2 52.4 5 50 5z"/>
+        </svg>
+
+        <div class="relative z-10 max-w-4xl">
+          <h2 class="text-2xl sm:text-3xl font-black tracking-tight">
+            Bem-vindo, <span id="heroUserName" class="text-orange-300">Administrador</span>
+          </h2>
+          <p class="mt-1 text-emerald-100 text-sm sm:text-base font-medium">
+            Busque diretamente por cliente ou número de proposta para abrir a ficha completa
+          </p>
+
+          <!-- Barra de Busca e Botão Painel de Propostas -->
+          <div class="mt-6 flex flex-col md:flex-row items-stretch md:items-center gap-3 relative">
+            
+            <!-- Campo de Busca Direta -->
+            <div class="flex-1 relative">
+              <i class="ph-bold ph-magnifying-glass absolute left-4 top-3.5 text-orange-600 text-lg"></i>
+              <input type="text" id="homeSearchInput" placeholder="Buscar por Cliente, Proposta (ex: P-10492), PV, OP ou Item..." 
+                class="w-full pl-12 pr-10 py-3 bg-[#fdfefe] text-emerald-950 placeholder:text-slate-400 rounded-2xl text-sm font-semibold shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-orange-400 border-2 border-emerald-300">
+              <button id="btnClearHomeSearch" class="hidden absolute right-3 top-3 text-emerald-600 hover:text-orange-600 p-1">
+                <i class="ph-bold ph-x text-base"></i>
+              </button>
+
+              <!-- Dropdown Flutuante de Resultados da Busca -->
+              <div id="homeSearchResultsDropdown" class="hidden absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-2xl border-2 border-orange-200 z-50 max-h-80 overflow-y-auto divide-y divide-emerald-100">
+                <!-- Preenchido via JS -->
+              </div>
+            </div>
+
+            <!-- Botão Painel de Propostas com destaque Laranja/Verde -->
+            <button id="btnGoToProposalsFromHero" class="px-6 py-3 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-slate-950 font-black text-sm shadow-lg shadow-orange-500/25 transition-all flex items-center justify-center gap-2 shrink-0 border border-orange-300">
+              <i class="ph-bold ph-table text-lg"></i>
+              <span>Painel de Propostas</span>
+            </button>
+
+          </div>
+
+          <div id="homeSearchResultCount" class="hidden mt-3 text-xs text-orange-200 font-bold bg-orange-950/40 border border-orange-500/30 px-3 py-1.5 rounded-xl w-fit">
+            Resultados encontrados para a sua pesquisa:
+          </div>
+        </div>
+      </div>
+
+      <!-- Cards de Métricas Principais (Tons Verdes mesclados com Laranja) -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+        
+        <!-- Total Propostas -->
+        <div class="bg-[#fcfdfc] p-4 rounded-2xl border-2 border-emerald-700/20 shadow-sm flex flex-col justify-between">
+          <div class="flex items-center justify-between text-emerald-700 mb-2">
+            <span class="text-xs font-extrabold text-emerald-900">Propostas</span>
+            <i class="ph-bold ph-files text-xl text-orange-600"></i>
+          </div>
+          <div>
+            <p id="statTotalProposals" class="text-2xl font-black text-emerald-950">0</p>
+            <p class="text-[11px] text-emerald-700/80 font-bold">Registros totais</p>
+          </div>
+        </div>
+
+        <!-- Liberação Financeiro -->
+        <div class="bg-[#fcfdfc] p-4 rounded-2xl border-2 border-emerald-700/20 shadow-sm flex flex-col justify-between">
+          <div class="flex items-center justify-between text-emerald-700 mb-2">
+            <span class="text-xs font-extrabold text-emerald-900">Lib. Financeiro</span>
+            <i class="ph-bold ph-currency-circle-dollar text-xl text-emerald-600"></i>
+          </div>
+          <div>
+            <p id="statFinApproved" class="text-2xl font-black text-emerald-700">0</p>
+            <p id="statFinPending" class="text-[11px] text-orange-700 font-bold">0 pendentes</p>
+          </div>
+        </div>
+
+        <!-- Liberação Adm 2º -->
+        <div class="bg-[#fcfdfc] p-4 rounded-2xl border-2 border-emerald-700/20 shadow-sm flex flex-col justify-between">
+          <div class="flex items-center justify-between text-teal-700 mb-2">
+            <span class="text-xs font-extrabold text-emerald-900">Lib. Adm 2º</span>
+            <i class="ph-bold ph-seal-check text-xl text-teal-700"></i>
+          </div>
+          <div>
+            <p id="statAdmApproved" class="text-2xl font-black text-teal-800">0</p>
+            <p id="statAdmPending" class="text-[11px] text-orange-700 font-bold">0 pendentes</p>
+          </div>
+        </div>
+
+        <!-- Faturado -->
+        <div class="bg-[#fcfdfc] p-4 rounded-2xl border-2 border-emerald-700/20 shadow-sm flex flex-col justify-between">
+          <div class="flex items-center justify-between text-orange-700 mb-2">
+            <span class="text-xs font-extrabold text-emerald-900">Faturado</span>
+            <i class="ph-bold ph-receipt text-xl text-orange-600"></i>
+          </div>
+          <div>
+            <p id="statFaturados" class="text-2xl font-black text-orange-600">0</p>
+            <p id="statFaturamentoPendente" class="text-[11px] text-emerald-800/80 font-bold">0 pendentes</p>
+          </div>
+        </div>
+
+        <!-- Despacho OP -->
+        <div class="bg-[#fcfdfc] p-4 rounded-2xl border-2 border-emerald-700/20 shadow-sm flex flex-col justify-between">
+          <div class="flex items-center justify-between text-emerald-700 mb-2">
+            <span class="text-xs font-extrabold text-emerald-900">Despacho OP</span>
+            <i class="ph-bold ph-truck text-xl text-emerald-700"></i>
+          </div>
+          <div>
+            <p id="statDespachados" class="text-2xl font-black text-emerald-800">0</p>
+            <p id="statDespachoPendente" class="text-[11px] text-orange-700 font-bold">0 a despachar</p>
+          </div>
+        </div>
+
+        <!-- CRM & ERP -->
+        <div class="bg-[#fcfdfc] p-4 rounded-2xl border-2 border-emerald-700/20 shadow-sm flex flex-col justify-between">
+          <div class="flex items-center justify-between text-emerald-700 mb-2">
+            <span class="text-xs font-extrabold text-emerald-900">CRM & ERP</span>
+            <i class="ph-bold ph-check-square text-xl text-orange-600"></i>
+          </div>
+          <div>
+            <p id="statSankhyaDone" class="text-2xl font-black text-emerald-900">0</p>
+            <p id="statPloomesDone" class="text-[11px] text-emerald-800/80 font-bold">0 no Ploomes</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ==================== TELA 2: PLANILHA DE PROPOSTAS (GRADE DE ALTO CONTRASTE 2.5PX) ==================== -->
+    <div id="viewProposals" class="hidden space-y-4">
+      
+      <!-- Barra Superior: Filtro por Período Alinhado ao Botão Nova Proposta e Busca -->
+      <div class="bg-[#fcfdfc] rounded-2xl p-4 border-2 border-emerald-800/25 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4 text-xs">
+        
+        <!-- Esquerda: Voltar + Filtro por Período + Botão Nova Proposta (Alinhados) -->
+        <div class="flex flex-wrap items-center gap-2.5">
+          <button id="btnBackToHome" class="p-2 rounded-xl bg-emerald-100/70 hover:bg-orange-100 text-emerald-900 hover:text-orange-800 transition-colors" title="Voltar ao início">
+            <i class="ph-bold ph-arrow-left text-base"></i>
+          </button>
+
+          <div class="flex items-center gap-1.5 text-emerald-950 font-black mr-1">
+            <i class="ph-bold ph-calendar text-base text-orange-600"></i>
+            <span>Período:</span>
+          </div>
+
+          <div class="flex items-center gap-1.5 bg-emerald-50/90 px-2.5 py-1.5 rounded-xl border border-emerald-300">
+            <span class="text-emerald-900 font-bold text-[11px]">De:</span>
+            <input type="date" id="panelDateStart" class="bg-transparent font-bold text-emerald-950 focus:outline-none">
+          </div>
+
+          <div class="flex items-center gap-1.5 bg-emerald-50/90 px-2.5 py-1.5 rounded-xl border border-emerald-300">
+            <span class="text-emerald-900 font-bold text-[11px]">Até:</span>
+            <input type="date" id="panelDateEnd" class="bg-transparent font-bold text-emerald-950 focus:outline-none">
+          </div>
+
+          <button id="btnApplyPanelDateFilter" class="px-3 py-1.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl font-bold transition-colors shadow-xs flex items-center gap-1">
+            <i class="ph-bold ph-funnel"></i> Filtrar
+          </button>
+
+          <button id="btnClearPanelDateFilter" class="px-2.5 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-900 rounded-xl font-bold transition-colors border border-orange-300" title="Limpar período">
+            Limpar
+          </button>
+
+          <div class="h-6 w-px bg-emerald-300 mx-1 hidden sm:block"></div>
+
+          <!-- Botão Nova Proposta Alinhado ao Filtro de Período -->
+          <button id="btnOpenNewClientModal" class="px-4 py-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-slate-950 font-black transition-colors shadow-sm flex items-center gap-1.5 border border-orange-400 admin-only-btn">
+            <i class="ph-bold ph-plus-circle text-base"></i>
+            <span>Nova Proposta</span>
+          </button>
+        </div>
+
+        <!-- Direita: Busca na Planilha -->
+        <div class="flex items-center gap-2">
+          <div class="relative w-full sm:w-72">
+            <i class="ph-bold ph-magnifying-glass absolute left-3 top-2.5 text-orange-600"></i>
+            <input type="text" id="panelSearchInput" placeholder="Buscar por cliente, PV, OP ou Item..." 
+              class="w-full pl-9 pr-3 py-1.5 bg-white border-2 border-emerald-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-orange-500 text-emerald-950 font-semibold">
+          </div>
+        </div>
+      </div>
+
+      <!-- TABELA EM GRADE COM DIVISÓRIAS REFORÇADAS (2.5px) -->
+      <div class="bg-[#fcfdfc] rounded-2xl border-2 border-[#133320] shadow-md overflow-hidden">
+        <div class="overflow-x-auto max-h-[720px]">
+          <table class="w-full text-left text-xs whitespace-nowrap table-grid">
+            <thead class="sticky top-0 z-20 text-[#082415] font-black uppercase tracking-wider text-[11px]">
+              <tr>
+                <th class="py-3 px-3">Cliente</th>
+                <th class="py-3 px-3">Proposta</th>
+                <th class="py-3 px-3">Data Proposta</th>
+                <th class="py-3 px-3">PV</th>
+                <th class="py-3 px-3">Data PV</th>
+                <th class="py-3 px-3 text-center">Lib. Financeiro 1º</th>
+                <th class="py-3 px-3 text-center">Lib. Adm 2º</th>
+                <th class="py-3 px-3">OP</th>
+                <th class="py-3 px-3">Data da OP</th>
+                <th class="py-3 px-3">ITEM</th>
+                <th class="py-3 px-3">Valor (R$)</th>
+                <th class="py-3 px-3 text-center">Faturado (Data)</th>
+                <th class="py-3 px-3 text-center">Despacho OP</th>
+                <th class="py-3 px-3">Data Despacho</th>
+                <th class="py-3 px-3">Ploomes Link</th>
+                <th class="py-3 px-3 text-center">Ploomes</th>
+                <th class="py-3 px-3 text-center">Doc Sankhya</th>
+                <th class="py-3 px-3 text-center">Arquivo</th>
+                <th class="py-3 px-3 text-center">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="mainTableBody" class="text-slate-900 font-medium">
+              <!-- Renderizado dinamicamente via JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <div class="px-4 py-3 bg-gradient-to-r from-emerald-100/90 to-orange-100/60 border-t-2 border-[#133320] flex items-center justify-between text-xs text-emerald-950 font-extrabold">
+          <span id="recordsCounterDisplay">Exibindo 0 registros</span>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- ==================== MODAL DE VISUALIZAÇÃO: FICHA DA PROPOSTA ==================== -->
+  <div id="proposalDetailModal" class="fixed inset-0 bg-emerald-950/70 backdrop-blur-xs z-50 hidden flex items-center justify-center p-3 sm:p-5">
+    <div class="bg-white rounded-3xl max-w-3xl w-full max-h-[92vh] overflow-y-auto border-2 border-emerald-600/30 shadow-2xl p-6 sm:p-8 space-y-6">
+      
+      <!-- Cabeçalho da Ficha -->
+      <div class="flex items-start justify-between pb-4 border-b border-emerald-100">
+        <div>
+          <span id="detailBadgeStatus" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-orange-100 text-orange-900 mb-2 border border-orange-300">
+            Status da Proposta
+          </span>
+          <h3 id="detailClienteName" class="text-xl sm:text-2xl font-black text-emerald-950 leading-tight">Nome da Empresa</h3>
+          <p id="detailSubtitle" class="text-xs sm:text-sm text-emerald-800 font-semibold mt-1">Proposta: P-0000 • Pedido: PV-0000</p>
+        </div>
+        <button id="btnCloseDetailModal" class="p-2 rounded-xl text-emerald-700 hover:text-orange-700 hover:bg-orange-50 transition-colors">
+          <i class="ph-bold ph-x text-xl"></i>
+        </button>
+      </div>
+
+      <!-- Resumo Executivo -->
+      <div class="p-4 rounded-2xl bg-gradient-to-r from-emerald-50 to-orange-50/50 border border-emerald-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div>
+          <span class="text-emerald-800 font-extrabold uppercase block text-[10px]">Status Geral Atual:</span>
+          <span id="detailStatusResumo" class="font-black text-emerald-950 text-sm">Em Aberto</span>
+        </div>
+        <div class="flex items-center gap-3">
+          <div id="detailHasOpBadge" class="flex items-center gap-1 font-bold text-emerald-900"></div>
+          <div id="detailHasFatBadge" class="flex items-center gap-1 font-bold text-orange-800"></div>
+        </div>
+      </div>
+
+      <!-- Informações Comerciais e Logística -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        
+        <!-- Comercial -->
+        <div class="p-4 rounded-2xl border-2 border-emerald-200/70 bg-emerald-50/40 space-y-2.5">
+          <h4 class="text-xs font-black uppercase tracking-wider text-emerald-900 flex items-center gap-1.5">
+            <i class="ph-bold ph-shopping-cart text-orange-600"></i> Informações Comerciais
+          </h4>
+          <div class="space-y-1.5 text-xs">
+            <div class="flex justify-between py-1 border-b border-emerald-200/60">
+              <span class="text-slate-600 font-semibold">Número da Proposta:</span>
+              <span id="detailPropostaNum" class="font-mono font-bold text-emerald-950">-</span>
+            </div>
+            <div class="flex justify-between py-1 border-b border-emerald-200/60">
+              <span class="text-slate-600 font-semibold">Data da Proposta:</span>
+              <span id="detailDataProposta" class="font-bold text-slate-900">-</span>
+            </div>
+            <div class="flex justify-between py-1 border-b border-emerald-200/60">
+              <span class="text-slate-600 font-semibold">Pedido de Venda (PV):</span>
+              <span id="detailPvNum" class="font-mono font-bold text-emerald-950">-</span>
+            </div>
+            <div class="flex justify-between py-1 border-b border-emerald-200/60">
+              <span class="text-slate-600 font-semibold">Data do PV:</span>
+              <span id="detailDataPv" class="font-bold text-slate-900">-</span>
+            </div>
+            <div class="flex justify-between py-1 border-b border-emerald-200/60">
+              <span class="text-slate-600 font-semibold">ITEM / Descrição:</span>
+              <span id="detailItemDesc" class="font-bold text-slate-900">-</span>
+            </div>
+            <div class="flex justify-between py-1">
+              <span class="text-slate-600 font-semibold">Valor Total:</span>
+              <span id="detailValor" class="font-mono font-black text-orange-700 text-sm">-</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Produção & Logística -->
+        <div class="p-4 rounded-2xl border-2 border-emerald-200/70 bg-emerald-50/40 space-y-2.5">
+          <h4 class="text-xs font-black uppercase tracking-wider text-emerald-900 flex items-center gap-1.5">
+            <i class="ph-bold ph-truck text-emerald-700"></i> Produção & Logística
+          </h4>
+          <div class="space-y-1.5 text-xs">
+            <div class="flex justify-between py-1 border-b border-emerald-200/60">
+              <span class="text-slate-600 font-semibold">Ordem de Produção (OP):</span>
+              <span id="detailOpNum" class="font-mono font-bold text-emerald-950">-</span>
+            </div>
+            <div class="flex justify-between py-1 border-b border-emerald-200/60">
+              <span class="text-slate-600 font-semibold">Data da OP:</span>
+              <span id="detailDataOp" class="font-bold text-slate-900">-</span>
+            </div>
+            <div class="flex justify-between py-1 border-b border-emerald-200/60">
+              <span class="text-slate-600 font-semibold">Status de Faturamento:</span>
+              <span id="detailStatusFat" class="font-bold">-</span>
+            </div>
+            <div class="flex justify-between py-1 border-b border-emerald-200/60">
+              <span class="text-slate-600 font-semibold">Data de Faturamento:</span>
+              <span id="detailDataFat" class="font-bold text-slate-900">-</span>
+            </div>
+            <div class="flex justify-between py-1 border-b border-emerald-200/60">
+              <span class="text-slate-600 font-semibold">Despacho OP:</span>
+              <span id="detailStatusDesp" class="font-bold">-</span>
+            </div>
+            <div class="flex justify-between py-1">
+              <span class="text-slate-600 font-semibold">Data do Despacho:</span>
+              <span id="detailDataDesp" class="font-bold text-slate-900">-</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Liberações, Integrações & Arquivo -->
+      <div class="p-4 rounded-2xl border-2 border-emerald-200/70 bg-emerald-50/40 space-y-3">
+        <h4 class="text-xs font-black uppercase tracking-wider text-emerald-900 flex items-center gap-1.5">
+          <i class="ph-bold ph-shield-check text-orange-600"></i> Liberações, Integrações & Arquivos
+        </h4>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+          <div class="p-3 rounded-xl bg-white border border-emerald-200 space-y-1">
+            <span class="text-emerald-800 font-bold block">Liberações:</span>
+            <div id="detailLiberaçõesBadges" class="flex flex-wrap gap-1.5 pt-1"></div>
+          </div>
+
+          <div class="p-3 rounded-xl bg-white border border-emerald-200 space-y-1">
+            <span class="text-emerald-800 font-bold block">Sankhya & Ploomes:</span>
+            <div id="detailIntegracoesBadges" class="flex flex-wrap gap-1.5 pt-1"></div>
+          </div>
+
+          <div class="p-3 rounded-xl bg-white border border-emerald-200 space-y-1">
+            <span class="text-emerald-800 font-bold block">Documento Anexo:</span>
+            <div id="detailArquivoBox" class="pt-1"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rodapé do Modal -->
+      <div class="flex items-center justify-between pt-3 border-t border-emerald-100">
+        <button id="btnEditFromDetailModal" class="px-4 py-2 bg-emerald-900 hover:bg-emerald-950 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors admin-only-btn">
+          <i class="ph-bold ph-pencil-simple text-sm"></i>
+          <span>Editar Esta Proposta</span>
+        </button>
+        <button id="btnCloseDetailModalBottom" class="px-5 py-2 bg-orange-100 hover:bg-orange-200 text-orange-950 rounded-xl text-xs font-black transition-colors">
+          Fechar Visualização
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ==================== MODAL DE CONFIGURAÇÕES: BANCO DE DADOS E XLSX ==================== -->
+  <div id="configModal" class="fixed inset-0 bg-emerald-950/70 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border-2 border-emerald-300 shadow-2xl p-6 space-y-6">
+      
+      <div class="flex items-center justify-between pb-3 border-b border-emerald-100">
+        <div class="flex items-center gap-2.5">
+          <div class="w-10 h-10 rounded-xl bg-orange-100 text-orange-700 flex items-center justify-center">
+            <i class="ph-bold ph-gear text-2xl"></i>
+          </div>
+          <div>
+            <h3 class="font-black text-emerald-950 text-base">Configurações do Sistema</h3>
+            <p class="text-xs text-emerald-800">Gerenciamento do banco de dados e planilhas Excel</p>
+          </div>
+        </div>
+        <button id="btnCloseConfigModal" class="p-1.5 rounded-lg text-emerald-700 hover:text-orange-700 hover:bg-orange-50">
+          <i class="ph-bold ph-x text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Gerenciamento do Banco de Dados (Exclusivo Administrador) -->
+      <div id="databaseAdminSection" class="space-y-3">
+        <h4 class="text-xs font-black text-emerald-950 uppercase tracking-wider flex items-center gap-2">
+          <i class="ph-bold ph-database text-rose-600 text-base"></i> Gerenciamento do Banco de Dados
+        </h4>
+        <div class="p-4 rounded-2xl border-2 border-rose-200 bg-rose-50/50 space-y-3">
+          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <p class="text-xs sm:text-sm font-bold text-slate-900">Limpar Registros do Banco de Dados</p>
+              <p class="text-xs text-slate-600 mt-0.5">Apaga todas as propostas para iniciar um controle limpo do zero.</p>
+            </div>
+            <div class="flex items-center gap-2 w-full sm:w-auto">
+              <button id="btnTriggerClearDatabase" class="flex-1 sm:flex-none px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs flex items-center justify-center gap-1.5 master-admin-only-btn">
+                <i class="ph-bold ph-trash"></i>
+                <span>Limpar Todo o BD</span>
+              </button>
+              <button id="btnRestoreDefaultData" class="flex-1 sm:flex-none px-3.5 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-950 rounded-xl text-xs font-bold transition-colors shadow-xs flex items-center justify-center gap-1.5 master-admin-only-btn" title="Restaurar dados de exemplo">
+                <i class="ph-bold ph-arrow-counter-clockwise"></i>
+                <span>Restaurar Padrão</span>
+              </button>
+            </div>
+          </div>
+          <div id="dbOperadorWarning" class="hidden text-[11px] text-rose-800 font-bold italic border-t border-rose-200 pt-2">
+            * Apenas o Administrador Principal (admin@proflux.com) possui permissão para limpar ou restaurar o banco de dados.
+          </div>
+        </div>
+      </div>
+
+      <!-- Seção Excel (.XLSX) - Acessível para Admin e Operacional -->
+      <div class="space-y-3 pt-3 border-t border-emerald-100">
+        <h4 class="text-xs font-black text-emerald-950 uppercase tracking-wider flex items-center gap-2">
+          <i class="ph-bold ph-microsoft-excel-logo text-emerald-700 text-base"></i> Planilhas em Excel (.XLSX)
+        </h4>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="p-4 rounded-2xl border-2 border-emerald-200 bg-emerald-50/50 flex flex-col justify-between space-y-3">
+            <div>
+              <p class="font-bold text-emerald-950 text-xs sm:text-sm">Baixar Planilha XLSX</p>
+              <p class="text-xs text-emerald-800 mt-1">Exporta todos os dados com formato compatível com Excel.</p>
+            </div>
+            <button id="btnExportXLSX" class="w-full py-2.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors shadow-xs">
+              <i class="ph-bold ph-download-simple"></i> Baixar Planilha Atual
+            </button>
+          </div>
+
+          <div class="p-4 rounded-2xl border-2 border-orange-200 bg-orange-50/50 flex flex-col justify-between space-y-3">
+            <div>
+              <p class="font-bold text-orange-950 text-xs sm:text-sm">Subir e Importar XLSX</p>
+              <p class="text-xs text-orange-900/80 mt-1">Importe arquivos externos diretamente para a planilha.</p>
+            </div>
+            <div>
+              <input type="file" id="inputXLSXFile" accept=".xlsx, .xls" class="hidden">
+              <button id="btnUploadXLSXTrigger" class="w-full py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors shadow-xs">
+                <i class="ph-bold ph-upload-simple"></i> Selecionar Arquivo XLSX
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-end pt-3 border-t border-emerald-100">
+        <button id="btnCloseConfigModalBottom" class="px-5 py-2 bg-orange-100 hover:bg-orange-200 text-orange-950 rounded-xl text-xs font-bold transition-colors">
+          Fechar
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ==================== MODAL DE PERFIL DO USUÁRIO & ACESSOS ==================== -->
+  <div id="profileModal" class="fixed inset-0 bg-emerald-950/70 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border-2 border-emerald-300 shadow-2xl p-6 space-y-6">
+      
+      <div class="flex items-center justify-between pb-3 border-b border-emerald-100">
+        <div class="flex items-center gap-2.5">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-100 to-orange-100 text-orange-700 flex items-center justify-center">
+            <i class="ph-bold ph-user-circle text-2xl"></i>
+          </div>
+          <div>
+            <h3 class="font-black text-emerald-950 text-base">Meu Perfil & Controle de Acesso</h3>
+            <p class="text-xs text-emerald-800">Identificação da conta, foto e permissões de usuários</p>
+          </div>
+        </div>
+        <button id="btnCloseProfileModal" class="p-1.5 rounded-lg text-emerald-700 hover:text-orange-700 hover:bg-orange-50">
+          <i class="ph-bold ph-x text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Minhas Informações de Usuário (Foto e Renomear) -->
+      <div class="p-4 rounded-2xl border-2 border-emerald-200 bg-emerald-50/50 space-y-4">
+        <h4 class="text-xs font-black text-emerald-950 uppercase tracking-wider">Minha Identificação</h4>
+        
+        <div class="flex flex-col sm:flex-row items-center gap-4">
+          <!-- Foto de Perfil com Upload -->
+          <div class="relative group cursor-pointer">
+            <div id="modalUserAvatarPreview" class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-emerald-200 to-orange-200 text-emerald-950 flex items-center justify-center text-xl font-black overflow-hidden border-2 border-emerald-400">
+              <span id="modalAvatarInitials">AD</span>
+              <img id="modalAvatarImg" src="" alt="Avatar" class="w-full h-full object-cover hidden">
+            </div>
+            <label class="absolute inset-0 bg-black/40 text-white rounded-2xl opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-[10px] font-bold cursor-pointer transition-opacity">
+              <i class="ph-bold ph-camera text-base"></i>
+              <span>Alterar</span>
+              <input type="file" id="profilePhotoInput" accept="image/*" class="hidden">
+            </label>
+          </div>
+
+          <div class="flex-1 space-y-2 w-full">
+            <div>
+              <label class="block text-[11px] font-bold text-emerald-900 mb-1">Nome de Exibição:</label>
+              <div class="flex items-center gap-2">
+                <input type="text" id="profileNameInput" class="flex-1 px-3 py-1.5 bg-white border-2 border-emerald-300 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500 text-emerald-950">
+                <button id="btnSaveProfileName" class="px-3.5 py-1.5 bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold rounded-xl transition-colors">
+                  Salvar Nome
+                </button>
+              </div>
+            </div>
+            <p class="text-[11px] text-emerald-900 font-medium">
+              E-mail de Login: <strong id="profileEmailDisplay" class="text-orange-950">admin@proflux.com</strong>
+            </p>
+          </div>
+        </div>
+
+        <div class="pt-2 border-t border-emerald-200 flex items-center justify-between">
+          <div>
+            <span class="text-xs font-bold text-emerald-950">Segurança da Conta</span>
+            <p class="text-[11px] text-emerald-800">Altere a sua senha de acesso a qualquer momento</p>
+          </div>
+          <button id="btnTriggerChangePasswordFromProfile" class="px-3.5 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold transition-colors">
+            Alterar Minha Senha
+          </button>
+        </div>
+      </div>
+
+      <!-- Gestão de Usuários (Visível e operável apenas por Administradores) -->
+      <div id="adminUserSection" class="space-y-3 pt-3 border-t border-emerald-100">
+        <h4 class="text-xs font-black text-emerald-950 uppercase tracking-wider flex items-center gap-2">
+          <i class="ph-bold ph-shield-check text-orange-600 text-base"></i> Gerenciar Usuários do Sistema
+        </h4>
+        
+        <div id="adminUserCreationBox" class="p-4 rounded-2xl border-2 border-orange-200 bg-orange-50/40 space-y-3">
+          <p class="text-xs font-bold text-orange-950">Criar Novo Usuário (Acesso por E-mail):</p>
+          <div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
+            <input type="text" id="newUserNameInput" placeholder="Nome completo" class="px-3 py-1.5 bg-white border border-orange-300 rounded-lg text-xs font-medium">
+            <input type="email" id="newUserEmailInput" placeholder="E-mail (login)" class="px-3 py-1.5 bg-white border border-orange-300 rounded-lg text-xs font-medium">
+            <input type="password" id="newUserPasswordInput" placeholder="Senha inicial" class="px-3 py-1.5 bg-white border border-orange-300 rounded-lg text-xs font-medium">
+            <select id="newUserRoleSelect" class="px-3 py-1.5 bg-white border border-orange-300 rounded-lg text-xs font-bold">
+              <option value="operador">Operador (Consulta)</option>
+              <option value="admin">Administrador (Total)</option>
+            </select>
+          </div>
+          <button id="btnCreateNewUser" class="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs">
+            <i class="ph-bold ph-user-plus"></i> Cadastrar Usuário
+          </button>
+        </div>
+
+        <div class="border-2 border-emerald-200 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
+          <table class="w-full text-xs text-left">
+            <thead class="bg-emerald-100 font-bold text-emerald-950">
+              <tr>
+                <th class="p-2.5">Nome</th>
+                <th class="p-2.5">E-mail</th>
+                <th class="p-2.5">Perfil</th>
+                <th class="p-2.5 text-right">Ação</th>
+              </tr>
+            </thead>
+            <tbody id="userListTableBody" class="divide-y divide-emerald-100 text-slate-800"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="flex justify-end pt-3 border-t border-emerald-100">
+        <button id="btnCloseProfileModalBottom" class="px-5 py-2 bg-orange-100 hover:bg-orange-200 text-orange-950 rounded-xl text-xs font-bold transition-colors">
+          Fechar
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ==================== MODAL DE CONFIRMAÇÃO PARA LIMPAR BANCO DE DADOS ==================== -->
+  <div id="clearDbConfirmModal" class="fixed inset-0 bg-emerald-950/70 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full border-2 border-rose-300 shadow-2xl p-6 space-y-4">
+      <div class="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+        <i class="ph-bold ph-warning-octagon text-2xl"></i>
+      </div>
+      <div class="text-center space-y-1">
+        <h3 class="text-lg font-black text-slate-900">Limpar Banco de Dados?</h3>
+        <p class="text-xs text-slate-600 leading-relaxed">
+          Tem certeza de que deseja apagar <strong>todos os registros cadastrados</strong>? Esta ação deixará a planilha completamente limpa.
+        </p>
+      </div>
+      <div class="p-3 bg-orange-50 rounded-xl border border-orange-200 text-[11px] text-orange-900 font-bold text-center">
+        Dica: Baixe uma cópia em Excel (.XLSX) nas Configurações antes de limpar caso queira salvar seus dados atuais.
+      </div>
+      <div class="flex items-center gap-2 pt-2">
+        <button type="button" id="btnCancelClearDbModal" class="flex-1 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-100 transition-colors">
+          Cancelar
+        </button>
+        <button type="button" id="btnConfirmClearDbAction" class="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-md transition-colors flex items-center justify-center gap-1.5">
+          <i class="ph-bold ph-trash"></i>
+          <span>Sim, Limpar Tudo</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL DE CADASTRO / EDIÇÃO DE CLIENTE ==================== -->
+  <div id="clientModal" class="fixed inset-0 bg-emerald-950/70 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border-2 border-emerald-400 shadow-2xl p-6">
+      
+      <div class="flex items-center justify-between pb-3 border-b border-emerald-100">
+        <h3 id="clientModalTitle" class="font-black text-emerald-950 text-base">Nova Proposta / Cliente</h3>
+        <button id="btnCloseClientModal" class="p-1.5 rounded-lg text-emerald-700 hover:text-orange-700 hover:bg-orange-50">
+          <i class="ph-bold ph-x text-lg"></i>
+        </button>
+      </div>
+
+      <form id="clientForm" class="mt-4 space-y-4">
+        <input type="hidden" id="formClientId">
+
+        <!-- Linha 1: Cliente e Proposta -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div class="sm:col-span-2">
+            <label class="block text-xs font-bold text-emerald-950 mb-1">Nome do Cliente *</label>
+            <input type="text" id="formCliente" required class="w-full px-3 py-2 bg-emerald-50/40 border-2 border-emerald-300 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-orange-500 font-semibold">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-emerald-950 mb-1">Proposta</label>
+            <input type="text" id="formProposta" class="w-full px-3 py-2 bg-emerald-50/40 border-2 border-emerald-300 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-orange-500 font-mono font-bold">
+          </div>
+        </div>
+
+        <!-- Linha 2: Datas Proposta e PV -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-emerald-950 mb-1">Data Proposta</label>
+            <input type="date" id="formDataProposta" class="w-full px-3 py-2 bg-emerald-50/40 border-2 border-emerald-300 rounded-xl text-xs focus:ring-2 focus:ring-orange-500 font-bold">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-emerald-950 mb-1">PV (Pedido de Venda)</label>
+            <input type="text" id="formPv" class="w-full px-3 py-2 bg-emerald-50/40 border-2 border-emerald-300 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-orange-500 font-mono font-bold">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-emerald-950 mb-1">Data PV</label>
+            <input type="date" id="formDataPv" class="w-full px-3 py-2 bg-emerald-50/40 border-2 border-emerald-300 rounded-xl text-xs focus:ring-2 focus:ring-orange-500 font-bold">
+          </div>
+        </div>
+
+        <!-- Linha 3: Liberações 1º e 2º -->
+        <div class="p-3 bg-gradient-to-r from-emerald-50 to-orange-50/60 rounded-xl border-2 border-emerald-200 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" id="formLiberacaoFin" class="w-4 h-4 text-emerald-700 rounded">
+            <span class="text-xs font-bold text-emerald-950">Liberação Financeiro 1º (ON)</span>
+          </label>
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" id="formLiberacaoAdm" class="w-4 h-4 text-orange-600 rounded">
+            <span class="text-xs font-bold text-emerald-950">Liberação Adm 2º (ON)</span>
+          </label>
+        </div>
+
+        <!-- Indicador de Liberação de OP -->
+        <div id="opLockHint" class="text-[11px] px-1 py-0.5 rounded font-bold"></div>
+
+        <!-- Linha 4: OP, Data OP, ITEM e Valor -->
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-emerald-950 mb-1">OP</label>
+            <input type="text" id="formOp" class="w-full px-3 py-2 bg-emerald-50/40 border-2 border-emerald-300 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-orange-500 font-mono">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-emerald-950 mb-1">Data da OP</label>
+            <input type="date" id="formDataOp" class="w-full px-3 py-2 bg-emerald-50/40 border-2 border-emerald-300 rounded-xl text-xs focus:ring-2 focus:ring-orange-500 font-bold">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-emerald-950 mb-1">ITEM</label>
+            <input type="text" id="formItem" placeholder="Produto / Serviço" class="w-full px-3 py-2 bg-emerald-50/40 border-2 border-emerald-300 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-orange-500 font-bold">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-emerald-950 mb-1">Valor (R$)</label>
+            <input type="number" step="0.01" id="formValor" placeholder="0.00" class="w-full px-3 py-2 bg-emerald-50/40 border-2 border-emerald-300 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-orange-500 font-mono font-bold">
+          </div>
+        </div>
+
+        <!-- Linha 5: Faturamento por Data -->
+        <div class="p-3 bg-orange-50/50 rounded-xl border-2 border-orange-200">
+          <label class="block text-xs font-bold text-orange-950 mb-1">Data do Faturamento (Com data = Faturado / Sem data = Pendente)</label>
+          <input type="date" id="formDataFaturamento" class="w-full px-3 py-2 bg-white border border-orange-300 rounded-xl text-xs focus:ring-2 focus:ring-orange-500 font-bold">
+        </div>
+
+        <!-- Linha 6: Despacho e Data Despacho -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="flex items-center gap-3 p-3 bg-emerald-50/50 rounded-xl border-2 border-emerald-200">
+            <input type="checkbox" id="formDespachado" class="w-4 h-4 text-emerald-700 rounded">
+            <span class="text-xs font-bold text-emerald-950">Despacho OP (Despachado)</span>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-emerald-950 mb-1">Data de Despacho</label>
+            <input type="date" id="formDataDespacho" class="w-full px-3 py-2 bg-emerald-50/40 border-2 border-emerald-300 rounded-xl text-xs focus:ring-2 focus:ring-orange-500 font-bold">
+          </div>
+        </div>
+
+        <!-- Linha 7: Ploomes Link, Ploomes Status e Doc Sankhya -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-emerald-950 mb-1">Ploomes Link (URL/ID)</label>
+            <input type="text" id="formPloomesLink" placeholder="https://..." class="w-full px-3 py-2 bg-emerald-50/40 border-2 border-emerald-300 rounded-xl text-xs focus:ring-2 focus:ring-orange-500">
+          </div>
+          <div class="flex items-center gap-3 p-3 bg-emerald-50/50 rounded-xl border-2 border-emerald-200">
+            <input type="checkbox" id="formPloomes" class="w-4 h-4 text-emerald-700 rounded">
+            <span class="text-xs font-bold text-emerald-950">Ploomes Tarefa (ON)</span>
+          </div>
+          <div class="flex items-center gap-3 p-3 bg-emerald-50/50 rounded-xl border-2 border-emerald-200">
+            <input type="checkbox" id="formDocSankhya" class="w-4 h-4 text-orange-600 rounded">
+            <span class="text-xs font-bold text-emerald-950">Doc Sankhya (ON)</span>
+          </div>
+        </div>
+
+        <!-- Linha 8: Anexo de Documento -->
+        <div class="p-3 bg-gradient-to-r from-emerald-50 to-orange-50/40 rounded-xl border-2 border-emerald-300 space-y-2">
+          <label class="block text-xs font-bold text-emerald-950">Documento / Arquivo Anexo (PDF, DOC, JPG até 3MB)</label>
+          <div class="flex items-center gap-3">
+            <input type="file" id="formFileInput" class="hidden">
+            <button type="button" id="btnUploadFormFileTrigger" class="px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-950 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 border border-orange-300">
+              <i class="ph-bold ph-paperclip"></i>
+              <span>Selecionar Arquivo</span>
+            </button>
+            <span id="formFileNameText" class="text-xs text-emerald-900 font-semibold truncate max-w-xs">Nenhum arquivo anexado</span>
+            <button type="button" id="btnRemoveFormFile" class="hidden text-rose-600 hover:text-rose-700 text-xs font-bold p-1">
+              <i class="ph-bold ph-trash"></i> Remover
+            </button>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-3 border-t border-emerald-100">
+          <button type="button" id="btnCancelClientModal" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100">Cancelar</button>
+          <button type="submit" class="px-5 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-slate-950 rounded-xl text-xs font-black shadow-xs">Salvar Registro</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL DE TROCA DE SENHA ==================== -->
+  <div id="changePasswordModal" class="fixed inset-0 bg-emerald-950/70 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-sm w-full border-2 border-orange-300 shadow-2xl p-6 space-y-4">
+      <div class="flex items-center justify-between pb-2 border-b border-emerald-100">
+        <h3 class="font-black text-emerald-950 text-sm">Alterar Minha Senha</h3>
+        <button id="btnCloseChangePasswordModal" class="p-1 rounded-lg text-emerald-700 hover:text-orange-700">
+          <i class="ph-bold ph-x"></i>
+        </button>
+      </div>
+
+      <form id="changePasswordForm" class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-emerald-950 mb-1">Nova Senha</label>
+          <div class="relative">
+            <input type="password" id="inputNewPassword" required minlength="4" class="w-full px-3 py-2 bg-emerald-50/30 border-2 border-emerald-300 rounded-xl text-xs focus:ring-2 focus:ring-orange-500">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-emerald-950 mb-1">Confirmar Nova Senha</label>
+          <input type="password" id="inputConfirmPassword" required minlength="4" class="w-full px-3 py-2 bg-emerald-50/30 border-2 border-emerald-300 rounded-xl text-xs focus:ring-2 focus:ring-orange-500">
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" id="btnCancelChangePassword" class="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-100">Cancelar</button>
+          <button type="submit" class="px-4 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-bold">Salvar Senha</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast" class="fixed bottom-5 right-5 z-50 bg-[#0e271a] text-white px-4 py-3 rounded-2xl shadow-2xl text-xs font-bold flex items-center gap-2 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none border-2 border-orange-500/50">
+    <i class="ph-bold ph-check-circle text-orange-400 text-base" id="toastIcon"></i>
+    <span id="toastMessage">Operação realizada</span>
+  </div>
+
+  <script>
+    const INITIAL_RECORDS = [
+      {
+        id: '1',
+        cliente: 'VALLOUREC TUBOS DO BRASIL S.A',
+        proposta: 'P-10492',
+        dataProposta: '2026-03-02',
+        pv: 'PV-8821',
+        dataPv: '2026-03-05',
+        liberacaoFin: true,
+        liberacaoAdm: true,
+        op: 'OP-4401',
+        dataOp: '2026-03-06',
+        item: 'Flange Especial 4 pol',
+        valor: 14500.00,
+        dataFaturamento: '2026-03-10',
+        despachado: true,
+        dataDespacho: '2026-03-12',
+        ploomesLink: 'https://app.ploomes.com/deal/8892',
+        ploomes: true,
+        docSankhya: true,
+        arquivoNome: 'memorial_vallourec.pdf',
+        arquivoData: ''
+      },
+      {
+        id: '2',
+        cliente: 'PETROBRAS TRANSPORTE S.A',
+        proposta: 'P-10498',
+        dataProposta: '2026-03-08',
+        pv: 'PV-8835',
+        dataPv: '2026-03-09',
+        liberacaoFin: true,
+        liberacaoAdm: false,
+        op: '',
+        dataOp: '',
+        item: 'Válvula Esfera Tripartida',
+        valor: 28900.50,
+        dataFaturamento: '',
+        despachado: false,
+        dataDespacho: '',
+        ploomesLink: 'https://app.ploomes.com/deal/9001',
+        ploomes: false,
+        docSankhya: true,
+        arquivoNome: '',
+        arquivoData: ''
+      },
+      {
+        id: '3',
+        cliente: 'USINAS SIDERÚRGICAS DE MINAS GERAIS',
+        proposta: 'P-10505',
+        dataProposta: '2026-03-15',
+        pv: 'PV-8840',
+        dataPv: '2026-03-16',
+        liberacaoFin: false,
+        liberacaoAdm: false,
+        op: '',
+        dataOp: '',
+        item: 'Tubo sem Costura Sch 80',
+        valor: 9200.00,
+        dataFaturamento: '',
+        despachado: false,
+        dataDespacho: '',
+        ploomesLink: '',
+        ploomes: false,
+        docSankhya: false,
+        arquivoNome: '',
+        arquivoData: ''
+      }
+    ];
+
+    const INITIAL_USERS = [
+      { id: 'u_admin', name: 'Administrador', email: 'admin@proflux.com', password: 'admin', role: 'admin', photo: '' },
+      { id: 'u_operador', name: 'Operador Comercial', email: 'operador@proflux.com', password: '123', role: 'operador', photo: '' }
+    ];
+
+    // Estados em memória da sessão (não salva login e não conecta automaticamente)
+    let records = [];
+    let users = [];
+    let currentUser = null; // Inicia nulo obrigatoriamente
+    let homeSearchQuery = '';
+    let panelSearchQuery = '';
+    let panelFilterStart = '';
+    let panelFilterEnd = '';
+    let modalCurrentFile = { nome: '', data: '' };
+
+    function loadData() {
+      records = JSON.parse(JSON.stringify(INITIAL_RECORDS));
+    }
+
+    function saveData() {
+      // Mantém registros em memória da sessão
+    }
+
+    function loadUsers() {
+      users = JSON.parse(JSON.stringify(INITIAL_USERS));
+    }
+
+    function saveUsers() {
+      // Mantém usuários em memória da sessão
+    }
+
+    function updateUserUI() {
+      if (!currentUser) return;
+      const nameDisp = document.getElementById('userNameDisplay');
+      const roleBadge = document.getElementById('userRoleBadge');
+      const avatarText = document.getElementById('userAvatarText');
+      const avatarImg = document.getElementById('userAvatarImg');
+      const dropName = document.getElementById('dropdownUserName');
+      const dropEmail = document.getElementById('dropdownUserEmail');
+      const dropRolePill = document.getElementById('dropdownRolePill');
+      const heroUserName = document.getElementById('heroUserName');
+      
+      const pNameInput = document.getElementById('profileNameInput');
+      const pEmailDisp = document.getElementById('profileEmailDisplay');
+      const modalAvatarInitials = document.getElementById('modalAvatarInitials');
+      const modalAvatarImg = document.getElementById('modalAvatarImg');
+
+      if (heroUserName) heroUserName.textContent = currentUser.name || currentUser.email;
+      if (nameDisp) nameDisp.textContent = currentUser.name || currentUser.email;
+      if (dropName) dropName.textContent = currentUser.name || currentUser.email;
+      if (dropEmail) dropEmail.textContent = currentUser.email;
+      if (pNameInput) pNameInput.value = currentUser.name || '';
+      if (pEmailDisp) pEmailDisp.textContent = currentUser.email;
+
+      const isAdmin = currentUser.role === 'admin';
+      const isMasterAdmin = currentUser.email?.toLowerCase() === 'admin@proflux.com';
+
+      if (roleBadge) {
+        if (isMasterAdmin) {
+          roleBadge.textContent = 'ADMIN MASTER';
+          roleBadge.className = 'text-[10px] text-orange-600 uppercase font-black tracking-wider';
+        } else if (isAdmin) {
+          roleBadge.textContent = 'ADMIN';
+          roleBadge.className = 'text-[10px] text-orange-600 uppercase font-black tracking-wider';
+        } else {
+          roleBadge.textContent = 'OPERADOR';
+          roleBadge.className = 'text-[10px] text-emerald-700 uppercase font-black tracking-wider';
+        }
+      }
+
+      if (dropRolePill) {
+        if (isMasterAdmin) {
+          dropRolePill.textContent = 'Acesso Master (Admin Total)';
+          dropRolePill.className = 'inline-block mt-1 px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-orange-100 text-orange-950 border border-orange-300';
+        } else if (isAdmin) {
+          dropRolePill.textContent = 'Acesso Administrador';
+          dropRolePill.className = 'inline-block mt-1 px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-950 border border-amber-300';
+        } else {
+          dropRolePill.textContent = 'Acesso Operador';
+          dropRolePill.className = 'inline-block mt-1 px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-950 border border-emerald-300';
+        }
+      }
+
+      // Foto ou Iniciais
+      const initials = (currentUser.name || currentUser.email || 'US').substring(0, 2).toUpperCase();
+      if (currentUser.photo) {
+        if (avatarImg) {
+          avatarImg.src = currentUser.photo;
+          avatarImg.classList.remove('hidden');
+        }
+        if (avatarText) avatarText.classList.add('hidden');
+
+        if (modalAvatarImg) {
+          modalAvatarImg.src = currentUser.photo;
+          modalAvatarImg.classList.remove('hidden');
+        }
+        if (modalAvatarInitials) modalAvatarInitials.classList.add('hidden');
+      } else {
+        if (avatarImg) avatarImg.classList.add('hidden');
+        if (avatarText) {
+          avatarText.textContent = initials;
+          avatarText.classList.remove('hidden');
+        }
+
+        if (modalAvatarImg) modalAvatarImg.classList.add('hidden');
+        if (modalAvatarInitials) {
+          modalAvatarInitials.textContent = initials;
+          modalAvatarInitials.classList.remove('hidden');
+        }
+      }
+
+      // Restrições de Operador vs Admin para botões gerais
+      const adminOnlyElements = document.querySelectorAll('.admin-only-btn');
+      adminOnlyElements.forEach(el => {
+        if (isAdmin) {
+          el.classList.remove('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
+          el.removeAttribute('disabled');
+        } else {
+          el.classList.add('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
+          el.setAttribute('disabled', 'true');
+        }
+      });
+
+      // Restrição Específica de Banco de Dados: APENAS o Master Admin pode mexer
+      const masterAdminOnlyElements = document.querySelectorAll('.master-admin-only-btn');
+      masterAdminOnlyElements.forEach(el => {
+        if (isMasterAdmin) {
+          el.classList.remove('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
+          el.removeAttribute('disabled');
+        } else {
+          el.classList.add('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
+          el.setAttribute('disabled', 'true');
+        }
+      });
+
+      const dbWarning = document.getElementById('dbOperadorWarning');
+      if (dbWarning) {
+        if (isMasterAdmin) {
+          dbWarning.classList.add('hidden');
+        } else {
+          dbWarning.classList.remove('hidden');
+          dbWarning.textContent = '* Apenas o Administrador Principal (admin@proflux.com) tem permissão para alterar, limpar ou restaurar o banco de dados.';
+        }
+      }
+
+      const adminUserSection = document.getElementById('adminUserSection');
+      if (adminUserSection) {
+        if (isAdmin) adminUserSection.classList.remove('hidden');
+        else adminUserSection.classList.add('hidden');
+      }
+    }
+
+    function showToast(msg, isSuccess = true) {
+      const toast = document.getElementById('toast');
+      const msgEl = document.getElementById('toastMessage');
+      const icon = document.getElementById('toastIcon');
+      if (!toast || !msgEl || !icon) return;
+
+      msgEl.textContent = msg;
+      icon.className = isSuccess 
+        ? 'ph-bold ph-check-circle text-orange-400 text-base' 
+        : 'ph-bold ph-warning-circle text-rose-400 text-base';
+
+      toast.classList.remove('translate-y-20', 'opacity-0');
+      setTimeout(() => {
+        toast.classList.add('translate-y-20', 'opacity-0');
+      }, 3000);
+    }
+
+    function getProposalStage(item) {
+      if (item.despachado) {
+        return { key: 'despachado', title: 'Despachado', color: 'emerald' };
+      }
+      if (item.dataFaturamento) {
+        return { key: 'faturado', title: 'Faturado', color: 'orange' };
+      }
+      if (item.op) {
+        return { key: 'producao', title: 'Em Produção (OP)', color: 'emerald' };
+      }
+      if (item.liberacaoFin && !item.liberacaoAdm) {
+        return { key: 'lib_adm', title: 'Aguardando Adm 2º', color: 'teal' };
+      }
+      if (!item.liberacaoFin) {
+        return { key: 'lib_fin', title: 'Aguardando Financeiro', color: 'amber' };
+      }
+      return { key: 'proposta', title: 'Em Aberto', color: 'emerald' };
+    }
+
+    function getFilteredPanelRecords() {
+      return records.filter(item => {
+        if (panelFilterStart) {
+          if (!item.dataProposta || item.dataProposta < panelFilterStart) return false;
+        }
+        if (panelFilterEnd) {
+          if (!item.dataProposta || item.dataProposta > panelFilterEnd) return false;
+        }
+
+        if (panelSearchQuery.trim() !== '') {
+          const q = panelSearchQuery.toLowerCase();
+          const matches = 
+            (item.cliente || '').toLowerCase().includes(q) ||
+            (item.proposta || '').toLowerCase().includes(q) ||
+            (item.pv || '').toLowerCase().includes(q) ||
+            (item.op || '').toLowerCase().includes(q) ||
+            (item.item || '').toLowerCase().includes(q);
+          if (!matches) return false;
+        }
+        return true;
+      });
+    }
+
+    function updateStats() {
+      const elTotal = document.getElementById('statTotalProposals');
+      const elFinApp = document.getElementById('statFinApproved');
+      const elFinPen = document.getElementById('statFinPending');
+      const elAdmApp = document.getElementById('statAdmApproved');
+      const elAdmPen = document.getElementById('statAdmPending');
+      const elFat = document.getElementById('statFaturados');
+      const elFatPen = document.getElementById('statFaturamentoPendente');
+      const elDesp = document.getElementById('statDespachados');
+      const elDespPen = document.getElementById('statDespachoPendente');
+      const elSankhya = document.getElementById('statSankhyaDone');
+      const elPloomes = document.getElementById('statPloomesDone');
+
+      const total = records.length;
+      const finApp = records.filter(i => i.liberacaoFin).length;
+      const admApp = records.filter(i => i.liberacaoAdm).length;
+      const faturados = records.filter(i => i.dataFaturamento).length;
+      const despachados = records.filter(i => i.despachado).length;
+      const sankhyaDone = records.filter(i => i.docSankhya).length;
+      const ploomesDone = records.filter(i => i.ploomes).length;
+
+      if (elTotal) elTotal.textContent = total;
+      if (elFinApp) elFinApp.textContent = finApp;
+      if (elFinPen) elFinPen.textContent = `${total - finApp} pendentes`;
+      if (elAdmApp) elAdmApp.textContent = admApp;
+      if (elAdmPen) elAdmPen.textContent = `${total - admApp} pendentes`;
+      if (elFat) elFat.textContent = faturados;
+      if (elFatPen) elFatPen.textContent = `${total - faturados} pendentes`;
+      if (elDesp) elDesp.textContent = despachados;
+      if (elDespPen) elDespPen.textContent = `${total - despachados} a despachar`;
+      if (elSankhya) elSankhya.textContent = sankhyaDone;
+      if (elPloomes) elPloomes.textContent = `${ploomesDone} no Ploomes`;
+
+      const counter = document.getElementById('recordsCounterDisplay');
+      if (counter) counter.textContent = `Exibindo ${getFilteredPanelRecords().length} de ${records.length} registros`;
+    }
+
+    function renderHomeSearchResults() {
+      const dropdown = document.getElementById('homeSearchResultsDropdown');
+      const countEl = document.getElementById('homeSearchResultCount');
+      if (!dropdown) return;
+
+      if (!homeSearchQuery || homeSearchQuery.trim() === '') {
+        dropdown.classList.add('hidden');
+        dropdown.innerHTML = '';
+        if (countEl) countEl.classList.add('hidden');
+        return;
+      }
+
+      const q = homeSearchQuery.toLowerCase();
+      const list = records.filter(item => 
+        (item.cliente || '').toLowerCase().includes(q) ||
+        (item.proposta || '').toLowerCase().includes(q) ||
+        (item.pv || '').toLowerCase().includes(q) ||
+        (item.op || '').toLowerCase().includes(q) ||
+        (item.item || '').toLowerCase().includes(q)
+      );
+
+      if (countEl) {
+        countEl.classList.remove('hidden');
+        countEl.textContent = `Encontrados ${list.length} resultado(s) para "${homeSearchQuery}":`;
+      }
+
+      dropdown.classList.remove('hidden');
+
+      if (list.length === 0) {
+        dropdown.innerHTML = `
+          <div class="p-4 text-center text-slate-500 text-xs font-bold">
+            <i class="ph-bold ph-magnifying-glass text-slate-300 text-xl block mb-1"></i>
+            Nenhuma proposta encontrada para "<strong>${escapeHtml(homeSearchQuery)}</strong>".
+          </div>
+        `;
+        return;
+      }
+
+      dropdown.innerHTML = list.map(item => {
+        const stage = getProposalStage(item);
+        const stageColorClass = stage.color === 'orange' ? 'bg-orange-100 text-orange-950 border-orange-300' : `bg-${stage.color}-100 text-${stage.color}-950 border-${stage.color}-300`;
+        return `
+          <div class="p-3.5 hover:bg-orange-50/70 transition-colors cursor-pointer flex items-center justify-between gap-3 group"
+               onclick="selectHomeSearchResult('${item.id}')">
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${stageColorClass} border">
+                  ${stage.title}
+                </span>
+                <span class="font-mono font-bold text-xs text-emerald-950 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300">
+                  ${escapeHtml(item.proposta || 'Sem Proposta')}
+                </span>
+                ${item.pv ? `<span class="font-mono text-[11px] text-slate-600 font-bold">PV: ${escapeHtml(item.pv)}</span>` : ''}
+              </div>
+              <h4 class="font-black text-slate-900 text-sm truncate group-hover:text-orange-700 transition-colors">
+                ${escapeHtml(item.cliente)}
+              </h4>
+              <p class="text-[11px] text-slate-600 truncate mt-0.5 font-bold">
+                ${escapeHtml(item.item || 'Sem item')} • ${formatCurrency(item.valor)}
+              </p>
+            </div>
+            <button type="button" class="px-3.5 py-1.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-slate-950 rounded-xl text-xs font-black shrink-0 flex items-center gap-1 transition-all shadow-xs">
+              <span>Abrir Ficha</span>
+              <i class="ph-bold ph-arrow-right text-xs"></i>
+            </button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    window.selectHomeSearchResult = function(id) {
+      const dropdown = document.getElementById('homeSearchResultsDropdown');
+      if (dropdown) dropdown.classList.add('hidden');
+      openDetailModal(id);
+    };
+
+    function renderTable() {
+      const tbody = document.getElementById('mainTableBody');
+      if (!tbody) return;
+
+      const filtered = getFilteredPanelRecords();
+      if (filtered.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="19" class="text-center py-12 text-slate-500 font-bold bg-white">
+              <i class="ph-bold ph-folder-notch-open text-3xl mb-2 block text-orange-400"></i>
+              Nenhum registro encontrado no banco de dados.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      const isReadOnly = currentUser?.role === 'operador';
+
+      tbody.innerHTML = filtered.map(item => {
+        const opAllowed = Boolean(item.liberacaoFin && item.liberacaoAdm);
+
+        return `
+          <tr class="transition-colors group bg-white">
+            <td class="py-2.5 px-3 font-black text-slate-950">${escapeHtml(item.cliente)}</td>
+            <td class="py-2.5 px-3 font-mono font-black text-emerald-900">${escapeHtml(item.proposta || '-')}</td>
+            <td class="py-2.5 px-3">
+              <input type="date" value="${item.dataProposta || ''}" ${isReadOnly ? 'disabled' : ''}
+                onchange="updateRecordField('${item.id}', 'dataProposta', this.value)"
+                class="bg-emerald-50/50 border border-emerald-300 rounded px-1.5 py-0.5 text-xs text-slate-900 focus:bg-white disabled:opacity-70 font-bold">
+            </td>
+            <td class="py-2.5 px-3 font-mono font-bold">${escapeHtml(item.pv || '-')}</td>
+            <td class="py-2.5 px-3">
+              <input type="date" value="${item.dataPv || ''}" ${isReadOnly ? 'disabled' : ''}
+                onchange="updateRecordField('${item.id}', 'dataPv', this.value)"
+                class="bg-emerald-50/50 border border-emerald-300 rounded px-1.5 py-0.5 text-xs text-slate-900 focus:bg-white disabled:opacity-70 font-bold">
+            </td>
+            <td class="py-2.5 px-3 text-center">
+              <button onclick="toggleSwitch('${item.id}', 'liberacaoFin')" ${isReadOnly ? 'disabled' : ''}
+                class="px-3 py-1 rounded-full text-[11px] font-black transition-all shadow-xs ${item.liberacaoFin ? 'bg-emerald-700 text-white hover:bg-emerald-800' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}">
+                ${item.liberacaoFin ? 'ON Liberado' : 'OFF Pendente'}
+              </button>
+            </td>
+            <td class="py-2.5 px-3 text-center">
+              <button onclick="toggleSwitch('${item.id}', 'liberacaoAdm')" ${isReadOnly ? 'disabled' : ''}
+                class="px-3 py-1 rounded-full text-[11px] font-black transition-all shadow-xs ${item.liberacaoAdm ? 'bg-orange-600 text-white hover:bg-orange-700' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}">
+                ${item.liberacaoAdm ? 'ON Liberado' : 'OFF Pendente'}
+              </button>
+            </td>
+            <td class="py-2.5 px-3 font-mono font-bold text-slate-950">
+              ${opAllowed ? `
+                <input type="text" value="${escapeHtml(item.op || '')}" ${isReadOnly ? 'disabled' : ''}
+                  onblur="updateRecordField('${item.id}', 'op', this.value)" placeholder="OP..."
+                  class="bg-transparent hover:bg-orange-50/60 focus:bg-white border border-emerald-300 rounded px-1.5 py-0.5 text-xs text-slate-900 font-mono w-24 font-bold">
+              ` : `
+                <span class="inline-flex items-center gap-1 text-[11px] text-orange-950 bg-orange-100 px-2 py-0.5 rounded border border-orange-300 font-extrabold" title="Requer Liberação Financeira e Adm 2º">
+                  <i class="ph-bold ph-lock-key text-orange-600"></i> Bloqueado
+                </span>
+              `}
+            </td>
+            <td class="py-2.5 px-3">
+              ${opAllowed ? `
+                <input type="date" value="${item.dataOp || ''}" ${isReadOnly ? 'disabled' : ''}
+                  onchange="updateRecordField('${item.id}', 'dataOp', this.value)"
+                  class="bg-emerald-50/50 border border-emerald-300 rounded px-1.5 py-0.5 text-xs text-slate-900 focus:bg-white disabled:opacity-70 font-bold">
+              ` : `
+                <span class="text-slate-400 text-[11px] italic font-semibold">Sem Liberações</span>
+              `}
+            </td>
+            <td class="py-2.5 px-3">
+              <input type="text" value="${escapeHtml(item.item || '')}" ${isReadOnly ? 'disabled' : ''}
+                onblur="updateRecordField('${item.id}', 'item', this.value)" placeholder="Item..."
+                class="bg-transparent hover:bg-orange-50/60 focus:bg-white border border-emerald-300 rounded px-1.5 py-0.5 text-xs text-slate-900 font-bold w-40 truncate">
+            </td>
+            <td class="py-2.5 px-3">
+              <input type="number" step="0.01" value="${item.valor !== undefined ? item.valor : ''}" ${isReadOnly ? 'disabled' : ''}
+                onblur="updateRecordField('${item.id}', 'valor', parseFloat(this.value) || 0)" placeholder="0.00"
+                class="bg-transparent hover:bg-orange-50/60 focus:bg-white border border-emerald-300 rounded px-1.5 py-0.5 text-xs text-orange-700 font-mono font-black w-24">
+            </td>
+            <td class="py-2.5 px-3 text-center">
+              <div class="inline-flex items-center gap-1 bg-orange-50 border border-orange-300 rounded-lg px-2 py-0.5">
+                <input type="date" value="${item.dataFaturamento || ''}" ${isReadOnly ? 'disabled' : ''}
+                  onchange="updateRecordField('${item.id}', 'dataFaturamento', this.value)"
+                  class="bg-transparent text-xs text-orange-950 font-bold focus:outline-none disabled:opacity-70">
+                ${item.dataFaturamento && !isReadOnly ? `
+                  <button onclick="updateRecordField('${item.id}', 'dataFaturamento', '')" class="text-slate-400 hover:text-rose-600" title="Limpar faturamento">
+                    <i class="ph-bold ph-x text-xs"></i>
+                  </button>
+                ` : ''}
+              </div>
+            </td>
+            <td class="py-2.5 px-3 text-center">
+              <button onclick="toggleSwitch('${item.id}', 'despachado')" ${isReadOnly ? 'disabled' : ''}
+                class="px-2.5 py-1 rounded-full text-[11px] font-black transition-all shadow-xs ${item.despachado ? 'bg-emerald-800 text-white hover:bg-emerald-900' : 'bg-orange-100 text-orange-950 hover:bg-orange-200 border border-orange-300'}">
+                ${item.despachado ? 'Despachado' : 'Não Despachado'}
+              </button>
+            </td>
+            <td class="py-2.5 px-3">
+              <input type="date" value="${item.dataDespacho || ''}" ${isReadOnly ? 'disabled' : ''}
+                onchange="updateRecordField('${item.id}', 'dataDespacho', this.value)"
+                class="bg-emerald-50/50 border border-emerald-300 rounded px-1.5 py-0.5 text-xs text-slate-900 focus:bg-white disabled:opacity-70 font-bold">
+            </td>
+            <td class="py-2.5 px-3">
+              <div class="flex items-center gap-1">
+                <input type="text" value="${escapeHtml(item.ploomesLink || '')}" ${isReadOnly ? 'disabled' : ''}
+                  onblur="updateRecordField('${item.id}', 'ploomesLink', this.value)" placeholder="Link/ID Ploomes..."
+                  class="bg-transparent hover:bg-orange-50/60 focus:bg-white border border-emerald-300 rounded px-1.5 py-0.5 text-xs text-slate-900 w-28 truncate font-medium">
+                ${item.ploomesLink ? `
+                  <a href="${item.ploomesLink.startsWith('http') ? item.ploomesLink : 'https://' + item.ploomesLink}" target="_blank" rel="noopener noreferrer" class="text-orange-600 hover:text-orange-800 p-1" title="Abrir Ploomes">
+                    <i class="ph-bold ph-arrow-square-out text-sm"></i>
+                  </a>
+                ` : ''}
+              </div>
+            </td>
+            <td class="py-2.5 px-3 text-center">
+              <button onclick="toggleSwitch('${item.id}', 'ploomes')" ${isReadOnly ? 'disabled' : ''}
+                class="px-2.5 py-1 rounded-full text-[11px] font-black transition-all shadow-xs ${item.ploomes ? 'bg-orange-600 text-white' : 'bg-slate-200 text-slate-700'}">
+                ${item.ploomes ? 'ON' : 'OFF'}
+              </button>
+            </td>
+            <td class="py-2.5 px-3 text-center">
+              <button onclick="toggleSwitch('${item.id}', 'docSankhya')" ${isReadOnly ? 'disabled' : ''}
+                class="px-2.5 py-1 rounded-full text-[11px] font-black transition-all shadow-xs ${item.docSankhya ? 'bg-emerald-700 text-white' : 'bg-slate-200 text-slate-700'}">
+                ${item.docSankhya ? 'ON' : 'OFF'}
+              </button>
+            </td>
+            <td class="py-2.5 px-3 text-center">
+              ${item.arquivoNome ? `
+                <div class="inline-flex items-center gap-1.5 bg-orange-50 px-2 py-1 rounded-lg border border-orange-200">
+                  <button onclick="downloadAttachment('${item.id}')" class="text-orange-950 hover:text-orange-700 font-bold flex items-center gap-1 text-[11px]" title="Baixar/Visualizar arquivo">
+                    <i class="ph-bold ph-download-simple text-sm text-orange-600"></i>
+                    <span class="max-w-[100px] truncate">${escapeHtml(item.arquivoNome)}</span>
+                  </button>
+                  ${!isReadOnly ? `
+                    <button onclick="removeAttachment('${item.id}')" class="text-slate-400 hover:text-rose-600 p-0.5 ml-0.5" title="Remover anexo">
+                      <i class="ph-bold ph-trash text-xs"></i>
+                    </button>
+                  ` : ''}
+                </div>
+              ` : `
+                ${!isReadOnly ? `
+                  <label class="cursor-pointer inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-100/80 hover:bg-orange-100 text-emerald-950 text-[11px] font-bold border border-emerald-300 transition-colors">
+                    <i class="ph-bold ph-paperclip text-orange-600"></i>
+                    <span>+ Anexar</span>
+                    <input type="file" class="hidden" onchange="attachFileToRecord('${item.id}', this)">
+                  </label>
+                ` : '<span class="text-slate-400 text-[11px]">Sem arquivo</span>'}
+              `}
+            </td>
+            <td class="py-2.5 px-3 text-center">
+              <div class="flex items-center justify-center gap-1">
+                <button onclick="openDetailModal('${item.id}')" class="p-1 rounded-lg text-emerald-800 hover:text-orange-600 hover:bg-orange-50" title="Ver Ficha">
+                  <i class="ph-bold ph-eye text-base"></i>
+                </button>
+                ${!isReadOnly ? `
+                  <button onclick="openEditModal('${item.id}')" class="p-1 rounded-lg text-emerald-800 hover:text-orange-600 hover:bg-orange-50" title="Editar">
+                    <i class="ph-bold ph-pencil-simple text-base"></i>
+                  </button>
+                  <button onclick="deleteRecord('${item.id}')" class="p-1 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50" title="Excluir">
+                    <i class="ph-bold ph-trash text-base"></i>
+                  </button>
+                ` : ''}
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    window.openDetailModal = function(id) {
+      const item = records.find(r => r.id === id);
+      if (!item) return;
+
+      const modal = document.getElementById('proposalDetailModal');
+      const stage = getProposalStage(item);
+
+      const badge = document.getElementById('detailBadgeStatus');
+      badge.textContent = stage.title;
+      badge.className = `inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-orange-100 text-orange-950 mb-2 border border-orange-300`;
+
+      document.getElementById('detailClienteName').textContent = item.cliente || '-';
+      document.getElementById('detailSubtitle').textContent = `Proposta: ${item.proposta || 'S/N'} • Pedido PV: ${item.pv || 'S/N'}`;
+
+      const resumoEl = document.getElementById('detailStatusResumo');
+      if (resumoEl) resumoEl.textContent = stage.title;
+
+      const opBadge = document.getElementById('detailHasOpBadge');
+      if (opBadge) {
+        opBadge.innerHTML = item.op 
+          ? `<i class="ph-bold ph-check-circle text-emerald-700"></i> OP: <strong>${escapeHtml(item.op)}</strong>`
+          : `<i class="ph-bold ph-clock text-orange-600"></i> Sem OP gerada`;
+      }
+
+      const fatBadge = document.getElementById('detailHasFatBadge');
+      if (fatBadge) {
+        fatBadge.innerHTML = item.dataFaturamento
+          ? `<i class="ph-bold ph-receipt text-orange-700"></i> Faturado em ${formatDate(item.dataFaturamento)}`
+          : `<i class="ph-bold ph-clock text-orange-600"></i> Faturamento Pendente`;
+      }
+
+      // Bloco Comercial
+      document.getElementById('detailPropostaNum').textContent = item.proposta || '-';
+      document.getElementById('detailDataProposta').textContent = formatDate(item.dataProposta);
+      document.getElementById('detailPvNum').textContent = item.pv || '-';
+      document.getElementById('detailDataPv').textContent = formatDate(item.dataPv);
+      document.getElementById('detailItemDesc').textContent = item.item || '-';
+      document.getElementById('detailValor').textContent = formatCurrency(item.valor);
+
+      // Bloco Produção & Logística
+      document.getElementById('detailOpNum').textContent = item.op || 'Aguardando Liberação e OP';
+      document.getElementById('detailDataOp').textContent = formatDate(item.dataOp);
+      
+      const elStatusFat = document.getElementById('detailStatusFat');
+      if (item.dataFaturamento) {
+        elStatusFat.textContent = 'Faturado';
+        elStatusFat.className = 'font-bold text-orange-700';
+      } else {
+        elStatusFat.textContent = 'Pendente de Faturamento';
+        elStatusFat.className = 'font-bold text-slate-500';
+      }
+      document.getElementById('detailDataFat').textContent = formatDate(item.dataFaturamento);
+
+      const elStatusDesp = document.getElementById('detailStatusDesp');
+      if (item.despachado) {
+        elStatusDesp.textContent = 'Despachado';
+        elStatusDesp.className = 'font-bold text-emerald-800';
+      } else {
+        elStatusDesp.textContent = 'Não Despachado (Em andamento)';
+        elStatusDesp.className = 'font-bold text-slate-500';
+      }
+      document.getElementById('detailDataDesp').textContent = formatDate(item.dataDespacho);
+
+      // Badges
+      const libBadges = document.getElementById('detailLiberaçõesBadges');
+      libBadges.innerHTML = `
+        <span class="px-2 py-0.5 rounded-lg text-[11px] font-bold ${item.liberacaoFin ? 'bg-emerald-100 text-emerald-950 border border-emerald-300' : 'bg-slate-100 text-slate-600'}">
+          ${item.liberacaoFin ? '✓ Lib. Fin 1º (OK)' : '✕ Fin Pendente'}
+        </span>
+        <span class="px-2 py-0.5 rounded-lg text-[11px] font-bold ${item.liberacaoAdm ? 'bg-orange-100 text-orange-950 border border-orange-300' : 'bg-slate-100 text-slate-600'}">
+          ${item.liberacaoAdm ? '✓ Lib. Adm 2º (OK)' : '✕ Adm Pendente'}
+        </span>
+      `;
+
+      const intBadges = document.getElementById('detailIntegracoesBadges');
+      intBadges.innerHTML = `
+        <span class="px-2 py-0.5 rounded-lg text-[11px] font-bold ${item.docSankhya ? 'bg-emerald-100 text-emerald-950 border border-emerald-300' : 'bg-slate-100 text-slate-600'}">
+          ${item.docSankhya ? '✓ Sankhya (OK)' : '✕ Sankhya Pendente'}
+        </span>
+        <span class="px-2 py-0.5 rounded-lg text-[11px] font-bold ${item.ploomes ? 'bg-orange-100 text-orange-950 border border-orange-300' : 'bg-slate-100 text-slate-600'}">
+          ${item.ploomes ? '✓ Ploomes (Feito)' : '✕ Ploomes Pendente'}
+        </span>
+        ${item.ploomesLink ? `
+          <a href="${item.ploomesLink.startsWith('http') ? item.ploomesLink : 'https://' + item.ploomesLink}" target="_blank" class="text-orange-700 font-bold hover:underline flex items-center gap-1 mt-1">
+            <i class="ph-bold ph-arrow-square-out"></i> Acessar Ploomes
+          </a>
+        ` : ''}
+      `;
+
+      const arqBox = document.getElementById('detailArquivoBox');
+      if (item.arquivoNome) {
+        arqBox.innerHTML = `
+          <button onclick="downloadAttachment('${item.id}')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-100 text-orange-950 hover:bg-orange-200 font-bold text-xs border border-orange-300 transition-colors shadow-xs">
+            <i class="ph-bold ph-download-simple text-sm text-orange-700"></i>
+            <span class="truncate max-w-[160px]">${escapeHtml(item.arquivoNome)}</span>
+          </button>
+        `;
+      } else {
+        arqBox.innerHTML = `<span class="text-slate-400 text-xs">Nenhum arquivo anexado</span>`;
+      }
+
+      const btnEdit = document.getElementById('btnEditFromDetailModal');
+      if (btnEdit) {
+        btnEdit.onclick = () => {
+          modal.classList.add('hidden');
+          openEditModal(item.id);
+        };
+      }
+
+      modal.classList.remove('hidden');
+    };
+
+    function closeDetailModal() {
+      const modal = document.getElementById('proposalDetailModal');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    window.attachFileToRecord = function(id, inputElement) {
+      if (currentUser?.role === 'operador') {
+        showToast('Operadores não possuem permissão de anexar arquivos.', false);
+        return;
+      }
+      const file = inputElement.files?.[0];
+      if (!file) return;
+
+      if (file.size > 3 * 1024 * 1024) {
+        showToast('O arquivo selecionado deve ter no máximo 3MB.', false);
+        return;
+      }
+
+      const record = records.find(r => r.id === id);
+      if (!record) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        record.arquivoNome = file.name;
+        record.arquivoData = e.target.result;
+        renderTable();
+        renderHomeSearchResults();
+        showToast(`Arquivo "${file.name}" anexado com sucesso!`);
+      };
+      reader.readAsDataURL(file);
+    };
+
+    window.removeAttachment = function(id) {
+      if (currentUser?.role === 'operador') {
+        showToast('Operadores não possuem permissão para remover arquivos.', false);
+        return;
+      }
+      const record = records.find(r => r.id === id);
+      if (!record) return;
+
+      record.arquivoNome = '';
+      record.arquivoData = '';
+      renderTable();
+      renderHomeSearchResults();
+      showToast('Arquivo removido com sucesso.');
+    };
+
+    window.downloadAttachment = function(id) {
+      const record = records.find(r => r.id === id);
+      if (!record || !record.arquivoNome) {
+        showToast('Nenhum anexo encontrado.', false);
+        return;
+      }
+
+      if (record.arquivoData) {
+        const link = document.createElement('a');
+        link.href = record.arquivoData;
+        link.download = record.arquivoNome;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else {
+        const blob = new Blob([`Documento anexado: ${record.arquivoNome}\nCliente: ${record.cliente}\nProposta: ${record.proposta}`], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = record.arquivoNome;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }
+      showToast(`Baixando "${record.arquivoNome}"...`);
+    };
+
+    window.toggleSwitch = function(id, field) {
+      if (currentUser?.role === 'operador') {
+        showToast('Operadores não possuem permissão de alteração.', false);
+        return;
+      }
+      const record = records.find(r => r.id === id);
+      if (!record) return;
+
+      if ((field === 'liberacaoFin' || field === 'liberacaoAdm') && record[field]) {
+        if (record.op) {
+          showToast('A OP já foi gerada. Remova o número da OP antes de retirar a liberação.', false);
+          return;
+        }
+      }
+
+      record[field] = !record[field];
+
+      if (field === 'despachado') {
+        if (record.despachado && !record.dataDespacho) {
+          record.dataDespacho = new Date().toISOString().split('T')[0];
+        } else if (!record.despachado) {
+          record.dataDespacho = '';
+        }
+      }
+
+      renderHomeSearchResults();
+      renderTable();
+      updateStats();
+      showToast('Status atualizado.');
+    };
+
+    window.updateRecordField = function(id, field, value) {
+      if (currentUser?.role === 'operador') {
+        showToast('Operadores não possuem permissão de alteração.', false);
+        return;
+      }
+      const record = records.find(r => r.id === id);
+      if (!record) return;
+
+      if ((field === 'op' || field === 'dataOp') && value) {
+        if (!record.liberacaoFin || !record.liberacaoAdm) {
+          showToast('Sem liberação Financeiro (1º) e Adm (2º), a OP não pode ser gerada.', false);
+          renderTable();
+          return;
+        }
+      }
+
+      record[field] = value;
+      renderHomeSearchResults();
+      renderTable();
+      updateStats();
+      showToast('Registro atualizado.');
+    };
+
+    window.deleteRecord = function(id) {
+      if (currentUser?.role === 'operador') {
+        showToast('Operadores não podem excluir registros.', false);
+        return;
+      }
+      records = records.filter(r => r.id !== id);
+      renderHomeSearchResults();
+      renderTable();
+      updateStats();
+      showToast('Registro excluído com sucesso.');
+    };
+
+    function switchView(viewName) {
+      const viewHome = document.getElementById('viewHome');
+      const viewProposals = document.getElementById('viewProposals');
+
+      if (viewName === 'home') {
+        if (viewHome) viewHome.classList.remove('hidden');
+        if (viewProposals) viewProposals.classList.add('hidden');
+        renderHomeSearchResults();
+      } else {
+        if (viewHome) viewHome.classList.add('hidden');
+        if (viewProposals) viewProposals.classList.remove('hidden');
+        renderTable();
+      }
+      updateStats();
+    }
+
+    const clearDbModal = document.getElementById('clearDbConfirmModal');
+
+    function openClearDbModal() {
+      if (currentUser?.email?.toLowerCase() !== 'admin@proflux.com') {
+        showToast('Apenas o Administrador Principal (admin@proflux.com) pode limpar o banco de dados.', false);
+        return;
+      }
+      if (clearDbModal) clearDbModal.classList.remove('hidden');
+    }
+
+    function closeClearDbModal() {
+      if (clearDbModal) clearDbModal.classList.add('hidden');
+    }
+
+    function executeClearDatabase() {
+      if (currentUser?.email?.toLowerCase() !== 'admin@proflux.com') {
+        showToast('Apenas o Administrador Principal (admin@proflux.com) pode limpar o banco de dados.', false);
+        return;
+      }
+      records = [];
+      closeClearDbModal();
+      const cfg = document.getElementById('configModal');
+      if (cfg) cfg.classList.add('hidden');
+
+      renderHomeSearchResults();
+      renderTable();
+      updateStats();
+      showToast('Banco de dados completamente limpo!', true);
+    }
+
+    function executeRestoreDefaultData() {
+      if (currentUser?.email?.toLowerCase() !== 'admin@proflux.com') {
+        showToast('Apenas o Administrador Principal (admin@proflux.com) pode restaurar o banco de dados.', false);
+        return;
+      }
+      records = JSON.parse(JSON.stringify(INITIAL_RECORDS));
+      const cfg = document.getElementById('configModal');
+      if (cfg) cfg.classList.add('hidden');
+
+      renderHomeSearchResults();
+      renderTable();
+      updateStats();
+      showToast('Dados de exemplo restaurados com sucesso!');
+    }
+
+    function syncOpFieldsState() {
+      const finChecked = document.getElementById('formLiberacaoFin')?.checked;
+      const admChecked = document.getElementById('formLiberacaoAdm')?.checked;
+      const opInput = document.getElementById('formOp');
+      const dataOpInput = document.getElementById('formDataOp');
+      const hint = document.getElementById('opLockHint');
+
+      const isApproved = Boolean(finChecked && admChecked);
+
+      if (opInput) {
+        opInput.disabled = !isApproved;
+        if (!isApproved) {
+          opInput.value = '';
+          opInput.placeholder = 'Bloqueado (exige liberações 1º e 2º)';
+          opInput.classList.add('bg-slate-100', 'text-slate-400', 'cursor-not-allowed');
+        } else {
+          opInput.placeholder = 'Ex: OP-4401';
+          opInput.classList.remove('bg-slate-100', 'text-slate-400', 'cursor-not-allowed');
+        }
+      }
+
+      if (dataOpInput) {
+        dataOpInput.disabled = !isApproved;
+        if (!isApproved) {
+          dataOpInput.value = '';
+          dataOpInput.classList.add('bg-slate-100', 'text-slate-400', 'cursor-not-allowed');
+        } else {
+          dataOpInput.classList.remove('bg-slate-100', 'text-slate-400', 'cursor-not-allowed');
+        }
+      }
+
+      if (hint) {
+        if (isApproved) {
+          hint.innerHTML = '<span class="text-emerald-800 font-black flex items-center gap-1"><i class="ph-bold ph-lock-key-open text-orange-500"></i> Liberações concedidas: Campos de OP desbloqueados para preenchimento.</span>';
+        } else {
+          hint.innerHTML = '<span class="text-orange-800 font-black flex items-center gap-1"><i class="ph-bold ph-lock-key text-orange-600"></i> Sem liberação financeira e adm 2º: Não é gerado o número de OP nem a Data da OP.</span>';
+        }
+      }
+    }
+
+    function openModal(client = null) {
+      if (currentUser?.role === 'operador') {
+        showToast('Operadores não possuem permissão para cadastrar ou editar.', false);
+        return;
+      }
+      const modal = document.getElementById('clientModal');
+      const title = document.getElementById('clientModalTitle');
+      const form = document.getElementById('clientForm');
+      if (!modal || !form) return;
+
+      form.reset();
+      modalCurrentFile = { nome: '', data: '' };
+
+      const fileText = document.getElementById('formFileNameText');
+      const btnRemoveFile = document.getElementById('btnRemoveFormFile');
+
+      if (client) {
+        if (title) title.textContent = 'Editar Registro / Cliente';
+        document.getElementById('formClientId').value = client.id;
+        document.getElementById('formCliente').value = client.cliente || '';
+        document.getElementById('formProposta').value = client.proposta || '';
+        document.getElementById('formDataProposta').value = client.dataProposta || '';
+        document.getElementById('formPv').value = client.pv || '';
+        document.getElementById('formDataPv').value = client.dataPv || '';
+        document.getElementById('formLiberacaoFin').checked = Boolean(client.liberacaoFin);
+        document.getElementById('formLiberacaoAdm').checked = Boolean(client.liberacaoAdm);
+        document.getElementById('formOp').value = client.op || '';
+        document.getElementById('formDataOp').value = client.dataOp || '';
+        document.getElementById('formItem').value = client.item || '';
+        document.getElementById('formValor').value = client.valor !== undefined ? client.valor : '';
+        document.getElementById('formDataFaturamento').value = client.dataFaturamento || '';
+        document.getElementById('formDespachado').checked = Boolean(client.despachado);
+        document.getElementById('formDataDespacho').value = client.dataDespacho || '';
+        document.getElementById('formPloomesLink').value = client.ploomesLink || '';
+        document.getElementById('formPloomes').checked = Boolean(client.ploomes);
+        document.getElementById('formDocSankhya').checked = Boolean(client.docSankhya);
+
+        if (client.arquivoNome) {
+          modalCurrentFile = { nome: client.arquivoNome, data: client.arquivoData || '' };
+          if (fileText) fileText.textContent = client.arquivoNome;
+          if (btnRemoveFile) btnRemoveFile.classList.remove('hidden');
+        } else {
+          if (fileText) fileText.textContent = 'Nenhum arquivo anexado';
+          if (btnRemoveFile) btnRemoveFile.classList.add('hidden');
+        }
+      } else {
+        if (title) title.textContent = 'Nova Proposta / Cliente';
+        document.getElementById('formClientId').value = '';
+        if (fileText) fileText.textContent = 'Nenhum arquivo anexado';
+        if (btnRemoveFile) btnRemoveFile.classList.add('hidden');
+      }
+
+      syncOpFieldsState();
+      modal.classList.remove('hidden');
+    }
+
+    window.openEditModal = function(id) {
+      const client = records.find(r => r.id === id);
+      if (client) openModal(client);
+    };
+
+    function closeModal() {
+      const modal = document.getElementById('clientModal');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    function exportToExcel() {
+      try {
+        if (typeof XLSX === 'undefined') {
+          showToast('Biblioteca SheetJS indisponível.', false);
+          return;
+        }
+
+        const dataToExport = records.map(r => ({
+          'Cliente': r.cliente || '',
+          'Proposta': r.proposta || '',
+          'Data Proposta': r.dataProposta || '',
+          'PV': r.pv || '',
+          'Data PV': r.dataPv || '',
+          'Liberação Financeiro 1º': r.liberacaoFin ? 'SIM' : 'NÃO',
+          'Liberação Adm 2º': r.liberacaoAdm ? 'SIM' : 'NÃO',
+          'OP': r.op || '',
+          'Data OP': r.dataOp || '',
+          'ITEM': r.item || '',
+          'Valor': r.valor || 0,
+          'Data Faturamento': r.dataFaturamento || '',
+          'Status Faturamento': r.dataFaturamento ? 'Faturado' : 'Pendente',
+          'Despachado': r.despachado ? 'SIM' : 'NÃO',
+          'Data Despacho': r.dataDespacho || '',
+          'Ploomes Link': r.ploomesLink || '',
+          'Ploomes Tarefa': r.ploomes ? 'SIM' : 'NÃO',
+          'Doc Sankhya': r.docSankhya ? 'SIM' : 'NÃO',
+          'Arquivo Anexo': r.arquivoNome || ''
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(dataToExport);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Controle');
+        XLSX.writeFile(wb, `ProFlux_Propostas_${new Date().toISOString().split('T')[0]}.xlsx`);
+        showToast('Planilha Excel exportada com sucesso!');
+      } catch (err) {
+        console.error(err);
+        showToast('Erro ao exportar planilha Excel.', false);
+      }
+    }
+
+    function importFromExcel(file) {
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheet = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheet];
+          const json = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+          if (!json || json.length === 0) {
+            showToast('Nenhum dado encontrado no arquivo XLSX.', false);
+            return;
+          }
+
+          let addedCount = 0;
+          json.forEach(row => {
+            const clienteVal = row['Cliente'] || row['CLIENTE'] || row['cliente'];
+            if (!clienteVal) return;
+
+            const isSim = (val) => String(val).toUpperCase().includes('SIM') || String(val).toUpperCase().includes('ON') || String(val) === '1' || val === true;
+
+            const newRecord = {
+              id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 5),
+              cliente: String(clienteVal).trim(),
+              proposta: String(row['Proposta'] || row['PROPOSTA'] || '').trim(),
+              dataProposta: formatDateForStorage(row['Data Proposta'] || row['DATA PROPOSTA']),
+              pv: String(row['PV'] || row['Pv'] || '').trim(),
+              dataPv: formatDateForStorage(row['Data PV'] || row['DATA PV']),
+              liberacaoFin: isSim(row['Liberação Financeiro 1º'] || row['Liberacao Fin']),
+              liberacaoAdm: isSim(row['Liberação Adm 2º'] || row['Liberacao Adm']),
+              op: String(row['OP'] || row['Op'] || '').trim(),
+              dataOp: formatDateForStorage(row['Data OP'] || row['DATA OP']),
+              item: String(row['ITEM'] || row['Item'] || '').trim(),
+              valor: parseFloat(row['Valor'] || row['VALOR'] || 0) || 0,
+              dataFaturamento: formatDateForStorage(row['Data Faturamento'] || row['DATA FATURAMENTO']),
+              despachado: isSim(row['Despachado'] || row['DESPACHADO']),
+              dataDespacho: formatDateForStorage(row['Data Despacho'] || row['DATA DESPACHO']),
+              ploomesLink: String(row['Ploomes Link'] || row['PLOOMES LINK'] || '').trim(),
+              ploomes: isSim(row['Ploomes'] || row['PLOOMES']),
+              docSankhya: isSim(row['Doc Sankhya'] || row['DOC SANKHYA']),
+              arquivoNome: String(row['Arquivo Anexo'] || '').trim(),
+              arquivoData: ''
+            };
+
+            if (!newRecord.liberacaoFin || !newRecord.liberacaoAdm) {
+              newRecord.op = '';
+              newRecord.dataOp = '';
+            }
+
+            records.push(newRecord);
+            addedCount++;
+          });
+
+          renderHomeSearchResults();
+          renderTable();
+          updateStats();
+          showToast(`${addedCount} novos registros importados com sucesso!`);
+        } catch (err) {
+          console.error(err);
+          showToast('Erro ao interpretar o arquivo XLSX.', false);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function renderUserList() {
+      const tbody = document.getElementById('userListTableBody');
+      if (!tbody) return;
+
+      tbody.innerHTML = users.map(u => `
+        <tr class="hover:bg-orange-50/50">
+          <td class="p-2.5 font-bold text-slate-800">${escapeHtml(u.name || u.email)}</td>
+          <td class="p-2.5 font-mono text-[11px] text-slate-600">${escapeHtml(u.email)}</td>
+          <td class="p-2.5">
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${u.role === 'admin' ? 'bg-orange-100 text-orange-900 border border-orange-300' : 'bg-emerald-100 text-emerald-900 border border-emerald-300'}">
+              ${u.role.toUpperCase()}
+            </span>
+          </td>
+          <td class="p-2.5 text-right">
+            ${u.email !== 'admin@proflux.com' && u.id !== currentUser?.id ? `
+              <button onclick="deleteUser('${u.id}')" class="text-rose-500 hover:text-rose-700 p-1 font-bold text-xs transition-colors">
+                Excluir
+              </button>
+            ` : '<span class="text-slate-400 text-[10px] italic">Protegido</span>'}
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    window.deleteUser = function(userId) {
+      if (currentUser?.role !== 'admin') {
+        showToast('Apenas administradores podem excluir perfis de usuários.', false);
+        return;
+      }
+      users = users.filter(u => u.id !== userId);
+      renderUserList();
+      showToast('Usuário removido com sucesso.');
+    };
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function formatDate(val) {
+      if (!val) return '-';
+      const parts = String(val).split('-');
+      if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+      return val;
+    }
+
+    function formatDateForStorage(val) {
+      if (!val) return '';
+      if (String(val).includes('/')) {
+        const p = String(val).split('/');
+        if (p.length === 3) return `${p[2]}-${p[1].padStart(2, '0')}-${p[0].padStart(2, '0')}`;
+      }
+      return String(val).trim();
+    }
+
+    function formatCurrency(val) {
+      if (val === undefined || val === null || isNaN(val)) return 'R$ 0,00';
+      return Number(val).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      loadUsers();
+      loadData();
+
+      // Força a tela de login inicial a permanecer visível sempre (Sem sessão automática)
+      currentUser = null;
+      const authGate = document.getElementById('authGateScreen');
+      if (authGate) authGate.classList.remove('hidden');
+
+      // Alternar visualização da senha (Olhinho)
+      const btnToggleGatePassword = document.getElementById('btnToggleGatePassword');
+      const gateInputPassword = document.getElementById('gateInputPassword');
+      const gatePasswordEyeIcon = document.getElementById('gatePasswordEyeIcon');
+
+      btnToggleGatePassword?.addEventListener('click', () => {
+        if (gateInputPassword.type === 'password') {
+          gateInputPassword.type = 'text';
+          gatePasswordEyeIcon.className = 'ph-bold ph-eye-slash text-lg text-orange-400';
+        } else {
+          gateInputPassword.type = 'password';
+          gatePasswordEyeIcon.className = 'ph-bold ph-eye text-lg text-emerald-400';
+        }
+      });
+
+      // Login obrigatório na tela inicial
+      const gateLoginForm = document.getElementById('gateLoginForm');
+      const gateLoginError = document.getElementById('gateLoginError');
+
+      gateLoginForm?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const email = document.getElementById('gateInputEmail')?.value.trim().toLowerCase();
+        const pass = document.getElementById('gateInputPassword')?.value.trim();
+
+        const foundUser = users.find(u => u.email.toLowerCase() === email && u.password === pass);
+        if (foundUser) {
+          currentUser = foundUser;
+          if (authGate) authGate.classList.add('hidden');
+          gateLoginError?.classList.add('hidden');
+          
+          // Limpa os campos do formulário para não deixar senhas gravadas na tela
+          document.getElementById('gateInputEmail').value = '';
+          document.getElementById('gateInputPassword').value = '';
+
+          updateUserUI();
+          renderHomeSearchResults();
+          renderTable();
+          updateStats();
+          showToast(`Acesso concedido. Bem-vindo(a), ${currentUser.name}!`);
+        } else {
+          if (gateLoginError) {
+            gateLoginError.classList.remove('hidden');
+          }
+        }
+      });
+
+      // Clique no Símbolo / Logo ProFlux volta para o Início
+      document.getElementById('logoHomeBtn')?.addEventListener('click', () => switchView('home'));
+      document.getElementById('btnGoToProposalsFromHero')?.addEventListener('click', () => switchView('proposals'));
+      document.getElementById('btnBackToHome')?.addEventListener('click', () => switchView('home'));
+
+      // Busca na Tela Inicial
+      const homeSearch = document.getElementById('homeSearchInput');
+      const btnClearHome = document.getElementById('btnClearHomeSearch');
+      homeSearch?.addEventListener('input', (e) => {
+        homeSearchQuery = e.target.value;
+        if (homeSearchQuery.length > 0) {
+          btnClearHome?.classList.remove('hidden');
+        } else {
+          btnClearHome?.classList.add('hidden');
+        }
+        renderHomeSearchResults();
+      });
+
+      btnClearHome?.addEventListener('click', () => {
+        if (homeSearch) homeSearch.value = '';
+        homeSearchQuery = '';
+        btnClearHome.classList.add('hidden');
+        renderHomeSearchResults();
+      });
+
+      window.addEventListener('click', (e) => {
+        const dropdown = document.getElementById('homeSearchResultsDropdown');
+        if (dropdown && !dropdown.contains(e.target) && e.target !== homeSearch) {
+          dropdown.classList.add('hidden');
+        }
+      });
+
+      // Botão Nova Proposta
+      document.getElementById('btnOpenNewClientModal')?.addEventListener('click', () => openModal());
+      document.getElementById('btnCloseClientModal')?.addEventListener('click', closeModal);
+      document.getElementById('btnCancelClientModal')?.addEventListener('click', closeModal);
+
+      // Ouvintes de Liberação no Modal para Travar/Destravar OP
+      document.getElementById('formLiberacaoFin')?.addEventListener('change', syncOpFieldsState);
+      document.getElementById('formLiberacaoAdm')?.addEventListener('change', syncOpFieldsState);
+
+      // Anexo de Arquivo dentro do Modal de Cadastro
+      const formFileInput = document.getElementById('formFileInput');
+      const btnUploadFormFileTrigger = document.getElementById('btnUploadFormFileTrigger');
+      const formFileNameText = document.getElementById('formFileNameText');
+      const btnRemoveFormFile = document.getElementById('btnRemoveFormFile');
+
+      btnUploadFormFileTrigger?.addEventListener('click', () => formFileInput?.click());
+
+      formFileInput?.addEventListener('change', (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (file.size > 3 * 1024 * 1024) {
+          showToast('O arquivo selecionado deve ter no máximo 3MB.', false);
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (uploadEvt) => {
+          modalCurrentFile = { nome: file.name, data: uploadEvt.target.result };
+          if (formFileNameText) formFileNameText.textContent = file.name;
+          if (btnRemoveFormFile) btnRemoveFormFile.classList.remove('hidden');
+        };
+        reader.readAsDataURL(file);
+      });
+
+      btnRemoveFormFile?.addEventListener('click', () => {
+        modalCurrentFile = { nome: '', data: '' };
+        if (formFileInput) formFileInput.value = '';
+        if (formFileNameText) formFileNameText.textContent = 'Nenhum arquivo anexado';
+        btnRemoveFormFile.classList.add('hidden');
+      });
+
+      // Submissão do Formulário de Cliente
+      document.getElementById('clientForm')?.addEventListener('submit', (e) => {
+        e.preventDefault();
+
+        const id = document.getElementById('formClientId').value;
+        const finLiberado = document.getElementById('formLiberacaoFin').checked;
+        const admLiberado = document.getElementById('formLiberacaoAdm').checked;
+
+        let opVal = document.getElementById('formOp').value.trim();
+        let dataOpVal = document.getElementById('formDataOp').value;
+
+        if ((!finLiberado || !admLiberado) && (opVal || dataOpVal)) {
+          showToast('Sem liberação financeira (1º) e adm (2º), a OP não pode ser gerada.', false);
+          opVal = '';
+          dataOpVal = '';
+        }
+
+        const payload = {
+          cliente: document.getElementById('formCliente').value.trim(),
+          proposta: document.getElementById('formProposta').value.trim(),
+          dataProposta: document.getElementById('formDataProposta').value,
+          pv: document.getElementById('formPv').value.trim(),
+          dataPv: document.getElementById('formDataPv').value,
+          liberacaoFin: finLiberado,
+          liberacaoAdm: admLiberado,
+          op: opVal,
+          dataOp: dataOpVal,
+          item: document.getElementById('formItem').value.trim(),
+          valor: parseFloat(document.getElementById('formValor').value) || 0,
+          dataFaturamento: document.getElementById('formDataFaturamento').value,
+          despachado: document.getElementById('formDespachado').checked,
+          dataDespacho: document.getElementById('formDataDespacho').value,
+          ploomesLink: document.getElementById('formPloomesLink').value.trim(),
+          ploomes: document.getElementById('formPloomes').checked,
+          docSankhya: document.getElementById('formDocSankhya').checked,
+          arquivoNome: modalCurrentFile.nome,
+          arquivoData: modalCurrentFile.data
+        };
+
+        if (id) {
+          const idx = records.findIndex(r => r.id === id);
+          if (idx !== -1) {
+            records[idx] = { ...records[idx], ...payload };
+          }
+        } else {
+          records.unshift({
+            id: Date.now().toString(),
+            ...payload
+          });
+        }
+
+        closeModal();
+        renderHomeSearchResults();
+        renderTable();
+        updateStats();
+        showToast('Proposta salva com sucesso!');
+      });
+
+      // Filtro por Período na Planilha
+      document.getElementById('btnApplyPanelDateFilter')?.addEventListener('click', () => {
+        panelFilterStart = document.getElementById('panelDateStart')?.value || '';
+        panelFilterEnd = document.getElementById('panelDateEnd')?.value || '';
+        renderTable();
+        updateStats();
+        showToast('Filtro de período aplicado.');
+      });
+
+      document.getElementById('btnClearPanelDateFilter')?.addEventListener('click', () => {
+        panelFilterStart = '';
+        panelFilterEnd = '';
+        if (document.getElementById('panelDateStart')) document.getElementById('panelDateStart').value = '';
+        if (document.getElementById('panelDateEnd')) document.getElementById('panelDateEnd').value = '';
+        renderTable();
+        updateStats();
+        showToast('Filtro de período limpo.');
+      });
+
+      // Busca na Planilha
+      document.getElementById('panelSearchInput')?.addEventListener('input', (e) => {
+        panelSearchQuery = e.target.value;
+        renderTable();
+        updateStats();
+      });
+
+      // Fechamento da Ficha Detalhada
+      document.getElementById('btnCloseDetailModal')?.addEventListener('click', closeDetailModal);
+      document.getElementById('btnCloseDetailModalBottom')?.addEventListener('click', closeDetailModal);
+
+      // Limpeza de Banco de Dados
+      document.getElementById('btnTriggerClearDatabase')?.addEventListener('click', openClearDbModal);
+      document.getElementById('btnCancelClearDbModal')?.addEventListener('click', closeClearDbModal);
+      document.getElementById('btnConfirmClearDbAction')?.addEventListener('click', executeClearDatabase);
+      document.getElementById('btnRestoreDefaultData')?.addEventListener('click', executeRestoreDefaultData);
+
+      // Modais e Menu do Usuário
+      const configModal = document.getElementById('configModal');
+      const profileModal = document.getElementById('profileModal');
+      const dropTrigger = document.getElementById('userDropdownTrigger');
+      const dropMenu = document.getElementById('userDropdownMenu');
+
+      dropTrigger?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dropMenu?.classList.toggle('hidden');
+      });
+      window.addEventListener('click', () => dropMenu?.classList.add('hidden'));
+
+      // Configurações
+      document.getElementById('btnOpenConfigModalFromDropdown')?.addEventListener('click', () => {
+        dropMenu?.classList.add('hidden');
+        configModal?.classList.remove('hidden');
+      });
+      document.getElementById('btnCloseConfigModal')?.addEventListener('click', () => configModal?.classList.add('hidden'));
+      document.getElementById('btnCloseConfigModalBottom')?.addEventListener('click', () => configModal?.classList.add('hidden'));
+
+      // Perfil
+      document.getElementById('btnOpenProfileModal')?.addEventListener('click', () => {
+        dropMenu?.classList.add('hidden');
+        renderUserList();
+        updateUserUI();
+        profileModal?.classList.remove('hidden');
+      });
+      document.getElementById('btnCloseProfileModal')?.addEventListener('click', () => profileModal?.classList.add('hidden'));
+      document.getElementById('btnCloseProfileModalBottom')?.addEventListener('click', () => profileModal?.classList.add('hidden'));
+
+      // Upload de Foto de Perfil
+      document.getElementById('profilePhotoInput')?.addEventListener('change', (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (file.size > 2 * 1024 * 1024) {
+          showToast('A foto deve ter no máximo 2MB.', false);
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+          currentUser.photo = evt.target.result;
+          const uIdx = users.findIndex(u => u.email === currentUser.email);
+          if (uIdx !== -1) users[uIdx].photo = evt.target.result;
+          updateUserUI();
+          renderUserList();
+          showToast('Foto de perfil atualizada!');
+        };
+        reader.readAsDataURL(file);
+      });
+
+      // Salvar Nome de Perfil
+      document.getElementById('btnSaveProfileName')?.addEventListener('click', () => {
+        const newName = document.getElementById('profileNameInput')?.value.trim();
+        if (!newName) {
+          showToast('Informe um nome válido.', false);
+          return;
+        }
+        currentUser.name = newName;
+        const uIdx = users.findIndex(u => u.email === currentUser.email);
+        if (uIdx !== -1) users[uIdx].name = newName;
+        updateUserUI();
+        renderUserList();
+        showToast('Nome atualizado com sucesso!');
+      });
+
+      // Exportação / Importação XLSX
+      document.getElementById('btnExportXLSX')?.addEventListener('click', exportToExcel);
+      const inputXLSX = document.getElementById('inputXLSXFile');
+      document.getElementById('btnUploadXLSXTrigger')?.addEventListener('click', () => inputXLSX?.click());
+      inputXLSX?.addEventListener('change', (e) => {
+        if (e.target.files?.[0]) {
+          importFromExcel(e.target.files[0]);
+          e.target.value = '';
+        }
+      });
+
+      // Criação de Novo Usuário (Admin)
+      document.getElementById('btnCreateNewUser')?.addEventListener('click', () => {
+        if (currentUser?.role !== 'admin') {
+          showToast('Apenas administradores podem cadastrar novos acessos.', false);
+          return;
+        }
+        const name = document.getElementById('newUserNameInput')?.value.trim();
+        const email = document.getElementById('newUserEmailInput')?.value.trim().toLowerCase();
+        const pass = document.getElementById('newUserPasswordInput')?.value.trim();
+        const role = document.getElementById('newUserRoleSelect')?.value;
+
+        if (!name || !email || !pass) {
+          showToast('Preencha nome, e-mail e senha.', false);
+          return;
+        }
+
+        if (users.find(x => x.email.toLowerCase() === email)) {
+          showToast('Já existe um usuário cadastrado com este e-mail.', false);
+          return;
+        }
+
+        const newUser = {
+          id: 'u_' + Date.now().toString(),
+          name,
+          email,
+          password: pass,
+          role,
+          photo: ''
+        };
+
+        users.push(newUser);
+        renderUserList();
+        document.getElementById('newUserNameInput').value = '';
+        document.getElementById('newUserEmailInput').value = '';
+        document.getElementById('newUserPasswordInput').value = '';
+        showToast(`Usuário ${name} cadastrado com sucesso!`);
+      });
+
+      // Alteração de Senha
+      const pwdModal = document.getElementById('changePasswordModal');
+      const openPwdModal = () => {
+        dropMenu?.classList.add('hidden');
+        configModal?.classList.add('hidden');
+        profileModal?.classList.add('hidden');
+        pwdModal?.classList.remove('hidden');
+      };
+
+      document.getElementById('btnTriggerChangePasswordFromProfile')?.addEventListener('click', openPwdModal);
+      document.getElementById('btnCloseChangePasswordModal')?.addEventListener('click', () => pwdModal?.classList.add('hidden'));
+      document.getElementById('btnCancelChangePassword')?.addEventListener('click', () => pwdModal?.classList.add('hidden'));
+
+      document.getElementById('changePasswordForm')?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const n1 = document.getElementById('inputNewPassword')?.value;
+        const n2 = document.getElementById('inputConfirmPassword')?.value;
+
+        if (n1 !== n2) {
+          showToast('As senhas não coincidem.', false);
+          return;
+        }
+
+        const userIdx = users.findIndex(u => u.email === currentUser.email);
+        if (userIdx !== -1) {
+          users[userIdx].password = n1;
+          currentUser.password = n1;
+          pwdModal?.classList.add('hidden');
+          showToast('Senha alterada com sucesso!');
+        }
+      });
+
+      // Encerrar Sessão (Sair)
+      document.getElementById('btnLogout')?.addEventListener('click', () => {
+        currentUser = null;
+        dropMenu?.classList.add('hidden');
+        if (authGate) authGate.classList.remove('hidden');
+        document.getElementById('gateInputEmail').value = '';
+        document.getElementById('gateInputPassword').value = '';
+        showToast('Sessão encerrada com sucesso.');
+      });
+
+      updateStats();
+      renderHomeSearchResults();
+      renderTable();
+    });
+  </script>
+</body>
+</html>
