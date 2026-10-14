@@ -12,6 +12,7 @@
   <!-- SheetJS (xlsx) para importação e exportação em Excel -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
   <!-- Google Fonts: Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1519,5 +1520,99 @@
     })();
 </script>
   <script>(function(){async function callAdmin(body){const r=await sb.functions.invoke('admin-users',{body:body});if(r.error){let m=r.error.message;try{const j=await r.error.context.json();if(j&&j.error)m=j.error;}catch(e){}throw new Error(m);}if(r.data&&r.data.error)throw new Error(r.data.error);return r.data;} function ensureForm(){let f=document.getElementById('masterCreateUserForm');if(f)return f;const tb=document.getElementById('userListTableBody');if(!tb)return null;const tbl=tb.closest('table');if(!tbl)return null;f=document.createElement('div');f.id='masterCreateUserForm';f.className='hidden mb-4 p-3 border border-emerald-300 rounded-xl bg-emerald-50/50';const ic='px-2 py-1.5 border border-emerald-300 rounded text-xs font-bold';f.innerHTML='<div class="text-xs font-black text-emerald-950 mb-2">Criar novo usuário</div><div class="grid grid-cols-1 sm:grid-cols-5 gap-2"><input id="mcuNome" type="text" placeholder="Nome" class="'+ic+'"><input id="mcuEmail" type="email" placeholder="E-mail" class="'+ic+'"><input id="mcuSenha" type="password" autocomplete="new-password" placeholder="Senha (mín. 6)" class="'+ic+'"><select id="mcuPapel" class="'+ic+'"><option value="operador">OPERADOR</option><option value="admin">ADMIN</option></select><button type="button" onclick="masterCreateUser()" class="px-3 py-1.5 bg-gradient-to-r from-orange-500 to-amber-500 text-slate-950 rounded-lg text-xs font-black">Criar usuário</button></div>';tbl.parentNode.insertBefore(f,tbl);return f;} renderUserList=function(){const tb=document.getElementById('userListTableBody');if(!tb)return;const f=ensureForm();if(f)f.classList.toggle('hidden',!isMaster());tb.innerHTML=users.map(function(u){const mail=(u.email||'').toLowerCase();const locked=u.id===(currentUser&&currentUser.id)||mail===MASTER_EMAIL.toLowerCase();const badge='<span class="px-2 py-0.5 rounded text-[10px] font-bold '+(u.role==='admin'?'bg-orange-100 text-orange-900 border border-orange-300':'bg-emerald-100 text-emerald-900 border border-emerald-300')+'">'+u.role.toUpperCase()+'</span>';const sel='<select onchange="changeUserRole(this.dataset.id,this.value)" data-id="'+u.id+'" class="px-2 py-0.5 border border-emerald-300 rounded text-[11px] font-bold"><option value="operador"'+(u.role==='operador'?' selected':'')+'>OPERADOR</option><option value="admin"'+(u.role==='admin'?' selected':'')+'>ADMIN</option></select>';let act='<span class="text-slate-400 text-[10px] italic">'+(locked?'Protegido':'-')+'</span>';if(isMaster()&&!locked){const d='data-id="'+u.id+'" data-email="'+escapeHtml(u.email||'')+'"';act='<button type="button" '+d+' onclick="masterSetPassword(this.dataset.id,this.dataset.email)" class="px-2 py-0.5 mr-1 rounded bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black">Redefinir senha</button><button type="button" '+d+' onclick="masterDeleteUser(this.dataset.id,this.dataset.email)" class="px-2 py-0.5 rounded bg-rose-100 text-rose-900 border border-rose-300 text-[10px] font-black">Excluir</button>';}return '<tr class="hover:bg-orange-50/50"><td class="p-2.5 font-bold text-slate-800">'+escapeHtml(u.name||u.email)+'</td><td class="p-2.5 font-mono text-[11px] text-slate-600">'+escapeHtml(u.email||'')+'</td><td class="p-2.5">'+(isMaster()&&!locked?sel:badge)+'</td><td class="p-2.5 text-right">'+act+'</td></tr>';}).join('');}; window.masterCreateUser=async function(){if(!isMaster()){showToast('Apenas o master pode criar usuários.',false);return;}const g=function(i){return document.getElementById(i);};const nome=g('mcuNome').value.trim(),email=g('mcuEmail').value.trim(),password=g('mcuSenha').value,papel=g('mcuPapel').value;if(!email||password.length<6){showToast('Informe e-mail e senha (mín. 6 caracteres).',false);return;}try{await callAdmin({action:'create',nome:nome,email:email,password:password,papel:papel});g('mcuNome').value='';g('mcuEmail').value='';g('mcuSenha').value='';showToast('Usuário criado com sucesso.');loadUsers();}catch(e){showToast('Erro: '+e.message,false);}}; window.masterDeleteUser=async function(id,email){if(!isMaster())return;if(!confirm('Excluir o usuário '+email+'? Esta ação não pode ser desfeita.'))return;try{await callAdmin({action:'delete',id:id});showToast('Usuário excluído.');}catch(e){showToast('Erro: '+e.message,false);}loadUsers();}; window.masterSetPassword=async function(id,email){if(!isMaster())return;const p=prompt('Nova senha para '+email+' (mín. 6 caracteres):');if(!p)return;try{await callAdmin({action:'setPassword',id:id,password:p});showToast('Senha redefinida.');}catch(e){showToast('Erro: '+e.message,false);}}; window.changeUserRole=async function(id,papel){if(!isMaster()){showToast('Apenas o master altera acessos.',false);loadUsers();return;}try{await callAdmin({action:'setRole',id:id,papel:papel});showToast('Acesso atualizado.');}catch(e){showToast('Erro: '+e.message,false);}loadUsers();}; if(typeof currentUser!=='undefined'&&currentUser)renderUserList();})();</script>
+  <script>
+    (function(){
+      const $ = id => document.getElementById(id);
+      const selected = new Set();
+      let currentDetailId = null;
+      const _openDetail = window.openDetailModal;
+      window.openDetailModal = function(id){ currentDetailId = id; _openDetail(id); };
+      function downloadProposalPDF(){
+        const i = records.find(r => r.id === currentDetailId);
+        if(!i){ showToast('Abra uma ficha primeiro.', false); return; }
+        if(typeof html2pdf === 'undefined'){ showToast('Biblioteca de PDF indisponível.', false); return; }
+        const s = getProposalStage(i);
+        const td1 = 'padding:6px 8px;border:1px solid #9fc3ad;background:#f1f8f3;font-weight:700;width:38%';
+        const td2 = 'padding:6px 8px;border:1px solid #9fc3ad';
+        const row = (l,v) => '<tr><td style="'+td1+'">'+l+'</td><td style="'+td2+'">'+escapeHtml(String(v===undefined||v===null||v===''?'-':v))+'</td></tr>';
+        const sec = (t,rows) => '<h3 style="margin:16px 0 6px;font-size:13px;color:#0b2214;text-transform:uppercase;letter-spacing:.04em">'+t+'</h3><table style="width:100%;border-collapse:collapse;font-size:12px">'+rows+'</table>';
+        const yn = (v,a,b) => v ? '✓ '+a : '✕ '+b;
+        const el = document.createElement('div');
+        el.style.cssText = 'width:700px;padding:24px;font-family:Inter,Arial,sans-serif;color:#0b2214;background:#fff';
+        el.innerHTML =
+          '<div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #f97316;padding-bottom:8px">'
+        +'<div style="font-size:22px;font-weight:900">Pro<span style="color:#ea580c">Flux</span></div>'
+        +'<div style="font-size:11px;color:#376348">Ficha da Proposta • Emitida em '+new Date().toLocaleDateString('pt-BR')+'</div></div>'
+        +'<h2 style="margin:14px 0 2px;font-size:20px">'+escapeHtml(i.cliente||'-')+'</h2>'
+        +'<div style="font-size:12px;color:#376348;font-weight:600">Proposta: '+escapeHtml(i.proposta||'S/N')+' • Pedido PV: '+escapeHtml(i.pv||'S/N')+'</div>'
+        +'<div style="margin-top:10px;padding:8px 10px;background:#fef3c7;border:1px solid #f59e0b;font-size:12px;font-weight:800">Status geral: '+escapeHtml(s.title)+'</div>'
+        + sec('Informações Comerciais', row('Número da Proposta',i.proposta)+row('Data da Proposta',formatDate(i.dataProposta))+row('Pedido de Venda (PV)',i.pv)+row('Data do PV',formatDate(i.dataPv))+row('ITEM / Descrição',i.item)+row('Valor Total',formatCurrency(i.valor)))
+        + sec('Produção & Logística', row('Ordem de Produção (OP)',i.op||'Aguardando Liberação e OP')+row('Data da OP',formatDate(i.dataOp))+row('Status de Faturamento',i.dataFaturamento?'Faturado':'Pendente de Faturamento')+row('Data de Faturamento',formatDate(i.dataFaturamento))+row('Despacho OP',i.despachado?'Despachado':'Não Despachado')+row('Data do Despacho',formatDate(i.dataDespacho)))
+        + sec('Liberações, Integrações & Arquivos', row('Liberação Financeiro 1º',yn(i.liberacaoFin,'Liberado','Pendente'))+row('Liberação Adm 2º',yn(i.liberacaoAdm,'Liberado','Pendente'))+row('Sankhya',yn(i.docSankhya,'OK','Pendente'))+row('Ploomes',yn(i.ploomes,'Feito','Pendente'))+row('Link Ploomes',i.ploomesLink)+row('Documento anexo',i.arquivoNome||'Nenhum arquivo anexado'));
+        const nome = ('Ficha_Proposta_'+(i.proposta||'SN')+'_'+(i.cliente||'')).replace(/[^\w\-]+/g,'_').slice(0,80)+'.pdf';
+        html2pdf().set({ margin:10, filename:nome, image:{type:'jpeg',quality:0.98}, html2canvas:{scale:2}, jsPDF:{unit:'mm',format:'a4',orientation:'portrait'} }).from(el).save().then(()=>showToast('PDF gerado com sucesso!'));
+      }
+      const closeB = $('btnCloseDetailModalBottom');
+      if(closeB){
+        const b = document.createElement('button');
+        b.type='button'; b.id='btnDownloadDetailPDF';
+        b.className='px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors';
+        b.innerHTML='<i class="ph-bold ph-file-pdf text-sm"></i><span>Baixar PDF</span>';
+        b.addEventListener('click', downloadProposalPDF);
+        const wrap = document.createElement('div'); wrap.className='flex items-center gap-2';
+        closeB.parentNode.insertBefore(wrap, closeB); wrap.appendChild(b); wrap.appendChild(closeB);
+      }
+      const exportBtn = document.createElement('button');
+      exportBtn.type='button'; exportBtn.id='btnExportSelected';
+      exportBtn.className='px-3 py-1.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl font-bold transition-colors flex items-center gap-1.5';
+      $('btnOpenNewClientModal')?.insertAdjacentElement('afterend', exportBtn);
+      function updateCount(){
+        exportBtn.innerHTML = '<i class="ph-bold ph-microsoft-excel-logo text-base"></i><span>Exportar selecionados ('+selected.size+')</span>';
+        const all = $('selAllRows'); if(all){ const l=getFilteredPanelRecords(); all.checked = l.length>0 && l.every(r=>selected.has(r.id)); }
+      }
+      function exportSelected(){
+        if(!selected.size){ showToast('Marque ao menos uma linha na tabela.', false); return; }
+        if(typeof XLSX === 'undefined'){ showToast('Biblioteca SheetJS indisponível.', false); return; }
+        const yn = v => v ? 'SIM' : 'NÃO';
+        const rows = records.filter(r => selected.has(r.id)).map(r => ({'Cliente':r.cliente,'Proposta':r.proposta,'Data Proposta':r.dataProposta,'PV':r.pv,'Data PV':r.dataPv,'Liberação Financeiro 1º':yn(r.liberacaoFin),'Liberação Adm 2º':yn(r.liberacaoAdm),'OP':r.op,'Data OP':r.dataOp,'ITEM':r.item,'Valor':r.valor||0,'Data Faturamento':r.dataFaturamento,'Status Faturamento':r.dataFaturamento?'Faturado':'Pendente','Despachado':yn(r.despachado),'Data Despacho':r.dataDespacho,'Ploomes Link':r.ploomesLink,'Ploomes Tarefa':yn(r.ploomes),'Doc Sankhya':yn(r.docSankhya),'Arquivo Anexo':r.arquivoNome}));
+        const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Selecionados');
+        XLSX.writeFile(wb, 'ProFlux_Selecionados_'+new Date().toISOString().split('T')[0]+'.xlsx');
+        showToast(rows.length+' registro(s) exportado(s) para Excel!');
+      }
+      exportBtn.addEventListener('click', exportSelected);
+      function decorate(){
+        const hr = document.querySelector('#viewProposals thead tr');
+        if(hr && !$('selAllRows')){
+          const th = document.createElement('th'); th.className='py-3 px-3 text-center';
+          th.innerHTML = '<input type="checkbox" id="selAllRows" title="Selecionar todos (filtrados)">';
+          hr.insertBefore(th, hr.firstChild);
+          $('selAllRows').addEventListener('change', e => {
+            getFilteredPanelRecords().forEach(r => e.target.checked ? selected.add(r.id) : selected.delete(r.id));
+            document.querySelectorAll('.selRowChk').forEach(c => c.checked = e.target.checked);
+            updateCount();
+          });
+        }
+        const tb = $('mainTableBody'); if(!tb) return;
+        const list = getFilteredPanelRecords();
+        const rows = Array.from(tb.children);
+        if(!list.length){ const c = tb.querySelector('td[colspan]'); if(c) c.colSpan = 20; updateCount(); return; }
+        if(rows.length !== list.length) return;
+        rows.forEach((tr, idx) => {
+          if(tr.querySelector('.selRowChk')) return;
+          const id = list[idx].id, td = document.createElement('td');
+          td.className = 'py-2.5 px-3 text-center';
+          td.innerHTML = '<input type="checkbox" class="selRowChk" '+(selected.has(id)?'checked':'')+'>';
+          td.firstChild.addEventListener('change', e => { e.target.checked ? selected.add(id) : selected.delete(id); updateCount(); });
+          tr.insertBefore(td, tr.firstChild);
+        });
+        updateCount();
+      }
+      const _renderTable = renderTable;
+      renderTable = function(){ _renderTable(); decorate(); };
+      renderTable();
+    })();
+  </script>
+  
+
 </body>
 </html>
