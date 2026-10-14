@@ -1677,5 +1677,56 @@
   })();
   
 </script>
+  <script>
+    (function(){
+      const $ = id => document.getElementById(id);
+      const old = $('btnCopySelected');
+      if(!old) return;
+      const btn = old.cloneNode(true);
+      old.parentNode.replaceChild(btn, old);
+      function getSel(){
+        const tb = $('mainTableBody'); if(!tb) return [];
+        const list = getFilteredPanelRecords();
+        return Array.from(tb.children).map((tr, idx) => tr.querySelector('.selRowChk:checked') ? list[idx] : null).filter(Boolean);
+      }
+      function build(sel){
+        const yn = v => v ? 'SIM' : 'NÃO';
+        const clean = v => String(v === undefined || v === null ? '' : v).replace(/[\t\r\n]+/g, ' ').trim();
+        const num = v => Number(v || 0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+        const dt = v => v ? formatDate(v) : '';
+        const head = ['Cliente','Proposta','Data Proposta','PV','Data PV','Liberação Financeiro 1º','Liberação Adm 2º','OP','Data OP','ITEM','Valor','Data Faturamento','Despachado','Data Despacho','Ploomes Link','Ploomes Tarefa','Doc Sankhya','Arquivo Anexo','Ficha Concluída'];
+        const rows = sel.map(r => [r.cliente, r.proposta, dt(r.dataProposta), r.pv, dt(r.dataPv), yn(r.liberacaoFin), yn(r.liberacaoAdm), r.op, dt(r.dataOp), r.item, num(r.valor), dt(r.dataFaturamento), yn(r.despachado), dt(r.dataDespacho), r.ploomesLink, yn(r.ploomes), yn(r.docSankhya), r.arquivoNome, yn(window.isFichaConcluida ? window.isFichaConcluida(r) : false)].map(clean));
+        const text = [head].concat(rows).map(l => l.join('\t')).join('\n');
+        const th = 'border:1px solid #133320;background:#d8e8dc;color:#082415;font-weight:bold;padding:4px 8px;text-align:left;white-space:nowrap';
+        const tdS = 'border:1px solid #376348;padding:4px 8px;white-space:nowrap';
+        const html = '<table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:12px"><thead><tr>' + head.map(h => '<th style="'+th+'">'+escapeHtml(h)+'</th>').join('') + '</tr></thead><tbody>' + rows.map(r => '<tr>' + r.map(c => '<td style="'+tdS+'">'+escapeHtml(c)+'</td>').join('') + '</tr>').join('') + '</tbody></table>';
+        return { text: text, html: html };
+      }
+      function legacyCopy(d){
+        const ta = document.createElement('textarea'); ta.value = d.text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        const h = e => { e.clipboardData.setData('text/html', d.html); e.clipboardData.setData('text/plain', d.text); e.preventDefault(); };
+        document.addEventListener('copy', h, {once:true});
+        let ok = false; try{ ok = document.execCommand('copy'); }catch(e){}
+        document.removeEventListener('copy', h); document.body.removeChild(ta);
+        return ok;
+      }
+      async function doCopy(){
+        const sel = getSel();
+        if(!sel.length){ showToast('Marque ao menos uma linha na tabela.', false); return; }
+        const d = build(sel);
+        const msg = sel.length + ' linha(s) copiada(s) como tabela! Cole com Ctrl+V.';
+        try{
+          if(window.ClipboardItem && navigator.clipboard && navigator.clipboard.write){
+            await navigator.clipboard.write([ new ClipboardItem({ 'text/html': new Blob([d.html], {type:'text/html'}), 'text/plain': new Blob([d.text], {type:'text/plain'}) }) ]);
+            showToast(msg); return;
+          }
+        }catch(e){}
+        if(legacyCopy(d)) showToast(msg); else showToast('Não foi possível copiar.', false);
+      }
+      btn.addEventListener('click', doCopy);
+    })();
+    
+  </script>
 </body>
 </html>
