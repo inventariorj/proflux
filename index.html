@@ -1613,6 +1613,69 @@
     })();
   </script>
   
-
+<script>
+  (function(){
+    const $ = id => document.getElementById(id);
+    const isComplete = i => !!(i && i.liberacaoFin && i.liberacaoAdm && i.op && i.dataFaturamento && i.despachado && i.docSankhya && i.ploomes);
+    window.isFichaConcluida = isComplete;
+    const _gps = getProposalStage;
+    getProposalStage = function(i){ if(isComplete(i)) return {key:'concluida', title:'Ficha Concluída ✓', color:'emerald'}; return _gps(i); };
+    const badgeEl = $('detailBadgeStatus');
+    const badgeOrig = badgeEl ? badgeEl.className : '';
+    const badgeDone = 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-emerald-600 text-white mb-2 border border-emerald-800';
+    const _od = window.openDetailModal;
+    window.openDetailModal = function(id){
+      _od(id);
+      const rec = records.find(r => r.id === id);
+      if(badgeEl) badgeEl.className = isComplete(rec) ? badgeDone : badgeOrig;
+      const res = $('detailStatusResumo');
+      if(res) res.className = isComplete(rec) ? 'font-black text-emerald-700 text-sm' : 'font-black text-emerald-950 text-sm';
+    };
+    function markDone(){
+      const tb = $('mainTableBody'); if(!tb) return;
+      const list = getFilteredPanelRecords();
+      const rows = Array.from(tb.children);
+      if(!list.length || rows.length !== list.length) return;
+      rows.forEach((tr, idx) => {
+        if(!isComplete(list[idx])) return;
+        const cell = Array.from(tr.children).find(td => !td.querySelector('.selRowChk'));
+        if(!cell || cell.querySelector('.fichaDoneTag')) return;
+        const tag = document.createElement('span');
+        tag.className = 'fichaDoneTag ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-600 text-white border border-emerald-800';
+        tag.textContent = '✓ Concluída';
+        cell.appendChild(tag);
+      });
+    }
+    const _rt2 = renderTable;
+    renderTable = function(){ _rt2(); markDone(); };
+    function getSelectedRecords(){
+      const tb = $('mainTableBody'); if(!tb) return [];
+      const list = getFilteredPanelRecords();
+      return Array.from(tb.children).map((tr, idx) => tr.querySelector('.selRowChk:checked') ? list[idx] : null).filter(Boolean);
+    }
+    function copySelected(){
+      const sel = getSelectedRecords();
+      if(!sel.length){ showToast('Marque ao menos uma linha na tabela.', false); return; }
+      const yn = v => v ? 'SIM' : 'NÃO';
+      const clean = v => String(v === undefined || v === null ? '' : v).replace(/[\t\r\n]+/g, ' ').trim();
+      const num = v => Number(v || 0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+      const head = ['Cliente','Proposta','Data Proposta','PV','Data PV','Liberação Financeiro 1º','Liberação Adm 2º','OP','Data OP','ITEM','Valor','Data Faturamento','Despachado','Data Despacho','Ploomes Link','Ploomes Tarefa','Doc Sankhya','Arquivo Anexo','Ficha Concluída'];
+      const lines = [head.join('\t')].concat(sel.map(r => [r.cliente, r.proposta, r.dataProposta ? formatDate(r.dataProposta) : '', r.pv, r.dataPv ? formatDate(r.dataPv) : '', yn(r.liberacaoFin), yn(r.liberacaoAdm), r.op, r.dataOp ? formatDate(r.dataOp) : '', r.item, num(r.valor), r.dataFaturamento ? formatDate(r.dataFaturamento) : '', yn(r.despachado), r.dataDespacho ? formatDate(r.dataDespacho) : '', r.ploomesLink, yn(r.ploomes), yn(r.docSankhya), r.arquivoNome, yn(isComplete(r))].map(clean).join('\t')));
+      const text = lines.join('\n');
+      const ok = () => showToast(sel.length + ' linha(s) copiada(s)! Cole com Ctrl+V no Excel, Sheets ou e-mail.');
+      const fallback = () => { const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); let done = false; try{ done = document.execCommand('copy'); }catch(e){} document.body.removeChild(ta); if(done) ok(); else showToast('Não foi possível copiar.', false); };
+      if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(text).then(ok).catch(fallback); } else { fallback(); }
+    }
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button'; copyBtn.id = 'btnCopySelected';
+    copyBtn.className = 'px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold transition-colors flex items-center gap-1.5';
+    copyBtn.innerHTML = '<i class="ph-bold ph-copy text-base"></i><span>Copiar selecionados</span>';
+    copyBtn.addEventListener('click', copySelected);
+    const anchor = $('btnExportSelected') || $('btnOpenNewClientModal');
+    if(anchor) anchor.insertAdjacentElement('afterend', copyBtn);
+    renderTable();
+  })();
+  
+</script>
 </body>
 </html>
