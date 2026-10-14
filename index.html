@@ -11,6 +11,7 @@
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
   <!-- SheetJS (xlsx) para importação e exportação em Excel -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Google Fonts: Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1054,1546 +1055,468 @@
   </div>
 
   <script>
-    const INITIAL_RECORDS = [
-      {
-        id: '1',
-        cliente: 'VALLOUREC TUBOS DO BRASIL S.A',
-        proposta: 'P-10492',
-        dataProposta: '2026-03-02',
-        pv: 'PV-8821',
-        dataPv: '2026-03-05',
-        liberacaoFin: true,
-        liberacaoAdm: true,
-        op: 'OP-4401',
-        dataOp: '2026-03-06',
-        item: 'Flange Especial 4 pol',
-        valor: 14500.00,
-        dataFaturamento: '2026-03-10',
-        despachado: true,
-        dataDespacho: '2026-03-12',
-        ploomesLink: 'https://app.ploomes.com/deal/8892',
-        ploomes: true,
-        docSankhya: true,
-        arquivoNome: 'memorial_vallourec.pdf',
-        arquivoData: ''
-      },
-      {
-        id: '2',
-        cliente: 'PETROBRAS TRANSPORTE S.A',
-        proposta: 'P-10498',
-        dataProposta: '2026-03-08',
-        pv: 'PV-8835',
-        dataPv: '2026-03-09',
-        liberacaoFin: true,
-        liberacaoAdm: false,
-        op: '',
-        dataOp: '',
-        item: 'Válvula Esfera Tripartida',
-        valor: 28900.50,
-        dataFaturamento: '',
-        despachado: false,
-        dataDespacho: '',
-        ploomesLink: 'https://app.ploomes.com/deal/9001',
-        ploomes: false,
-        docSankhya: true,
-        arquivoNome: '',
-        arquivoData: ''
-      },
-      {
-        id: '3',
-        cliente: 'USINAS SIDERÚRGICAS DE MINAS GERAIS',
-        proposta: 'P-10505',
-        dataProposta: '2026-03-15',
-        pv: 'PV-8840',
-        dataPv: '2026-03-16',
-        liberacaoFin: false,
-        liberacaoAdm: false,
-        op: '',
-        dataOp: '',
-        item: 'Tubo sem Costura Sch 80',
-        valor: 9200.00,
-        dataFaturamento: '',
-        despachado: false,
-        dataDespacho: '',
-        ploomesLink: '',
-        ploomes: false,
-        docSankhya: false,
-        arquivoNome: '',
-        arquivoData: ''
-      }
-    ];
-
-    const INITIAL_USERS = [
-      { id: 'u_admin', name: 'Administrador', email: 'admin@proflux.com', password: 'admin', role: 'admin', photo: '' },
-      { id: 'u_operador', name: 'Operador Comercial', email: 'operador@proflux.com', password: '123', role: 'operador', photo: '' }
-    ];
-
-    // Estados em memória da sessão (não salva login e não conecta automaticamente)
-    let records = [];
-    let users = [];
-    let currentUser = null; // Inicia nulo obrigatoriamente
-    let homeSearchQuery = '';
-    let panelSearchQuery = '';
-    let panelFilterStart = '';
-    let panelFilterEnd = '';
-    let modalCurrentFile = { nome: '', data: '' };
-
-    function loadData() {
-      records = JSON.parse(JSON.stringify(INITIAL_RECORDS));
+    const SUPABASE_URL = 'https://dskyvxfakymtwgfysoav.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_s-fxCJ_8Weq7R-tuK3HayA_AmpoKKHU';
+    const MASTER_EMAIL = 'admin@proflux.com';
+    const BUCKET = 'anexos';
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const COLS = { cliente:'cliente', proposta:'proposta', dataProposta:'data_proposta', pv:'pv', dataPv:'data_pv', liberacaoFin:'liberacao_financeiro', liberacaoAdm:'liberacao_adm', op:'op', dataOp:'data_op', item:'item', valor:'valor', dataFaturamento:'data_faturamento', despachado:'despacho', dataDespacho:'data_despacho', ploomesLink:'ploomes_link', ploomes:'ploomes', docSankhya:'doc_sankhya', arquivoNome:'arquivo_nome', arquivoPath:'arquivo_url' };
+    const BOOLS = ['liberacaoFin','liberacaoAdm','despachado','ploomes','docSankhya'];
+    let records = [], users = [], currentUser = null, rtChannel = null, renderTimer = null, rtAnnounced = false;
+    let homeSearchQuery = '', panelSearchQuery = '', panelFilterStart = '', panelFilterEnd = '';
+    let modalFile = { nome: '', file: null, removed: false };
+    const $ = id => document.getElementById(id);
+    function escapeHtml(s){ if(!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
+    function formatDate(v){ if(!v) return '-'; const p=String(v).split('-'); return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0] : v; }
+    function formatDateForStorage(v){ if(!v) return ''; if(String(v).includes('/')){ const p=String(v).split('/'); if(p.length===3) return p[2]+'-'+p[1].padStart(2,'0')+'-'+p[0].padStart(2,'0'); } return String(v).trim(); }
+    function formatCurrency(v){ if(v===undefined||v===null||isNaN(v)) return 'R$ 0,00'; return Number(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
+    function showToast(msg, ok=true){
+      const t=$('toast'), m=$('toastMessage'), i=$('toastIcon'); if(!t||!m||!i) return;
+      m.textContent=msg; i.className = ok ? 'ph-bold ph-check-circle text-orange-400 text-base' : 'ph-bold ph-warning-circle text-rose-400 text-base';
+      t.classList.remove('translate-y-20','opacity-0'); setTimeout(()=>t.classList.add('translate-y-20','opacity-0'),3200);
     }
-
-    function saveData() {
-      // Mantém registros em memória da sessão
+    function toRow(o){ const r={}; for(const k in o){ if(!(k in COLS)) continue; let v=o[k]; if(/^data/.test(k) && !v) v=null; r[COLS[k]]=v; } return r; }
+    function fromRow(r){ const o={id:r.id}; for(const k in COLS){ let v=r[COLS[k]]; if(BOOLS.includes(k)) v=!!v; else if(k==='valor') v=Number(v||0); else v=v??''; o[k]=v; } return o; }
+    function isAdmin(){ return currentUser?.role==='admin'; }
+    function isMaster(){ return currentUser?.email?.toLowerCase()===MASTER_EMAIL.toLowerCase(); }
+    function requireAdmin(){ if(!isAdmin()){ showToast('Operadores não possuem permissão de alteração.',false); return false; } return true; }
+    function refreshAll(){ renderHomeSearchResults(); renderTable(); updateStats(); }
+    function scheduleRender(){
+      clearTimeout(renderTimer);
+      renderTimer=setTimeout(()=>{ const a=document.activeElement; if(a && a.tagName==='INPUT' && a.closest && a.closest('#mainTableBody')){ scheduleRender(); return; } refreshAll(); },300);
     }
-
-    function loadUsers() {
-      users = JSON.parse(JSON.stringify(INITIAL_USERS));
+    function resizeImage(file,max=160){
+      return new Promise((res,rej)=>{ const fr=new FileReader(); fr.onerror=rej;
+                                     fr.onload=e=>{ const img=new Image(); img.onerror=rej; img.onload=()=>{ const s=Math.min(1,max/Math.max(img.width,img.height)); const c=document.createElement('canvas'); c.width=Math.round(img.width*s); c.height=Math.round(img.height*s); c.getContext('2d').drawImage(img,0,0,c.width,c.height); res(c.toDataURL('image/jpeg',0.8)); }; img.src=e.target.result; };
+                                     fr.readAsDataURL(file); });
     }
-
-    function saveUsers() {
-      // Mantém usuários em memória da sessão
+    async function loadRecords(){
+      let all=[], from=0;
+      while(true){
+        const { data, error } = await sb.from('propostas').select('*').order('criado_em',{ascending:false}).range(from,from+999);
+        if(error){ showToast('Erro ao carregar propostas: '+error.message,false); return; }
+        all=all.concat(data); if(data.length<1000) break; from+=1000;
+      }
+      records=all.map(fromRow); refreshAll();
     }
-
-    function updateUserUI() {
-      if (!currentUser) return;
-      const nameDisp = document.getElementById('userNameDisplay');
-      const roleBadge = document.getElementById('userRoleBadge');
-      const avatarText = document.getElementById('userAvatarText');
-      const avatarImg = document.getElementById('userAvatarImg');
-      const dropName = document.getElementById('dropdownUserName');
-      const dropEmail = document.getElementById('dropdownUserEmail');
-      const dropRolePill = document.getElementById('dropdownRolePill');
-      const heroUserName = document.getElementById('heroUserName');
-      
-      const pNameInput = document.getElementById('profileNameInput');
-      const pEmailDisp = document.getElementById('profileEmailDisplay');
-      const modalAvatarInitials = document.getElementById('modalAvatarInitials');
-      const modalAvatarImg = document.getElementById('modalAvatarImg');
-
-      if (heroUserName) heroUserName.textContent = currentUser.name || currentUser.email;
-      if (nameDisp) nameDisp.textContent = currentUser.name || currentUser.email;
-      if (dropName) dropName.textContent = currentUser.name || currentUser.email;
-      if (dropEmail) dropEmail.textContent = currentUser.email;
-      if (pNameInput) pNameInput.value = currentUser.name || '';
-      if (pEmailDisp) pEmailDisp.textContent = currentUser.email;
-
-      const isAdmin = currentUser.role === 'admin';
-      const isMasterAdmin = currentUser.email?.toLowerCase() === 'admin@proflux.com';
-
-      if (roleBadge) {
-        if (isMasterAdmin) {
-          roleBadge.textContent = 'ADMIN MASTER';
-          roleBadge.className = 'text-[10px] text-orange-600 uppercase font-black tracking-wider';
-        } else if (isAdmin) {
-          roleBadge.textContent = 'ADMIN';
-          roleBadge.className = 'text-[10px] text-orange-600 uppercase font-black tracking-wider';
-        } else {
-          roleBadge.textContent = 'OPERADOR';
-          roleBadge.className = 'text-[10px] text-emerald-700 uppercase font-black tracking-wider';
-        }
-      }
-
-      if (dropRolePill) {
-        if (isMasterAdmin) {
-          dropRolePill.textContent = 'Acesso Master (Admin Total)';
-          dropRolePill.className = 'inline-block mt-1 px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-orange-100 text-orange-950 border border-orange-300';
-        } else if (isAdmin) {
-          dropRolePill.textContent = 'Acesso Administrador';
-          dropRolePill.className = 'inline-block mt-1 px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-950 border border-amber-300';
-        } else {
-          dropRolePill.textContent = 'Acesso Operador';
-          dropRolePill.className = 'inline-block mt-1 px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-950 border border-emerald-300';
-        }
-      }
-
-      // Foto ou Iniciais
-      const initials = (currentUser.name || currentUser.email || 'US').substring(0, 2).toUpperCase();
-      if (currentUser.photo) {
-        if (avatarImg) {
-          avatarImg.src = currentUser.photo;
-          avatarImg.classList.remove('hidden');
-        }
-        if (avatarText) avatarText.classList.add('hidden');
-
-        if (modalAvatarImg) {
-          modalAvatarImg.src = currentUser.photo;
-          modalAvatarImg.classList.remove('hidden');
-        }
-        if (modalAvatarInitials) modalAvatarInitials.classList.add('hidden');
-      } else {
-        if (avatarImg) avatarImg.classList.add('hidden');
-        if (avatarText) {
-          avatarText.textContent = initials;
-          avatarText.classList.remove('hidden');
-        }
-
-        if (modalAvatarImg) modalAvatarImg.classList.add('hidden');
-        if (modalAvatarInitials) {
-          modalAvatarInitials.textContent = initials;
-          modalAvatarInitials.classList.remove('hidden');
-        }
-      }
-
-      // Restrições de Operador vs Admin para botões gerais
-      const adminOnlyElements = document.querySelectorAll('.admin-only-btn');
-      adminOnlyElements.forEach(el => {
-        if (isAdmin) {
-          el.classList.remove('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
-          el.removeAttribute('disabled');
-        } else {
-          el.classList.add('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
-          el.setAttribute('disabled', 'true');
-        }
+    async function loadUsers(){
+      const { data, error } = await sb.from('profiles').select('*').order('nome');
+      if(error) return;
+      users=data.map(p=>({id:p.id,name:p.nome,email:p.email,role:p.papel==='admin'?'admin':'operador',photo:p.foto||''}));
+      renderUserList();
+    }
+    function subscribeRealtime(){
+      if(rtChannel) sb.removeChannel(rtChannel);
+      rtChannel = sb.channel('proflux-propostas')
+      .on('postgres_changes',{event:'*',schema:'public',table:'propostas'},payload=>{
+        if(payload.eventType==='DELETE'){ records=records.filter(r=>r.id!==payload.old.id); }
+        else { const rec=fromRow(payload.new); const i=records.findIndex(r=>r.id===rec.id); if(i>=0) records[i]=rec; else records.unshift(rec); }
+        scheduleRender();
+      })
+      .subscribe(status=>{ if(status==='SUBSCRIBED' && !rtAnnounced){ rtAnnounced=true; showToast('Sincronização em tempo real ativa.'); } });
+    }
+    async function patchRecord(id, patch){
+      const { data, error } = await sb.from('propostas').update({...toRow(patch), updated_at:new Date().toISOString()}).eq('id',id).select('id');
+      if(error || !data || !data.length){ showToast(error ? 'Erro ao salvar: '+error.message : 'Sem permissão para alterar este registro.',false); await loadRecords(); return false; }
+      const r=records.find(x=>x.id===id); if(r) Object.assign(r,patch); return true;
+    }
+    async function uploadFile(id,file){
+      const path=id+'/'+Date.now()+'_'+file.name.replace(/[^\w.\-]+/g,'_');
+      const { error } = await sb.storage.from(BUCKET).upload(path,file,{upsert:false}); if(error) throw error; return path;
+    }
+    async function removeFile(path){ if(path) await sb.storage.from(BUCKET).remove([path]); }
+    async function startSession(session){
+      const u=session.user;
+      const { data: prof } = await sb.from('profiles').select('*').eq('id',u.id).maybeSingle();
+      currentUser={ id:u.id, email:u.email, name:prof?.nome||u.email, role:prof?.papel==='admin'?'admin':'operador', photo:prof?.foto||'' };
+      $('authGateScreen')?.classList.add('hidden'); $('gateLoginError')?.classList.add('hidden');
+      updateUserUI(); await loadRecords(); subscribeRealtime(); loadUsers();
+      showToast('Acesso concedido. Bem-vindo(a), '+currentUser.name+'!');
+    }
+    function endSession(){
+      currentUser=null; records=[]; users=[]; rtAnnounced=false;
+      if(rtChannel){ sb.removeChannel(rtChannel); rtChannel=null; }
+      $('authGateScreen')?.classList.remove('hidden'); refreshAll();
+    }
+    function updateUserUI(){
+      if(!currentUser) return;
+      const nm=currentUser.name||currentUser.email, adm=isAdmin(), master=isMaster();
+      ['userNameDisplay','dropdownUserName','heroUserName'].forEach(i=>{ if($(i)) $(i).textContent=nm; });
+      if($('dropdownUserEmail')) $('dropdownUserEmail').textContent=currentUser.email;
+      if($('profileNameInput')) $('profileNameInput').value=currentUser.name||'';
+      if($('profileEmailDisplay')) $('profileEmailDisplay').textContent=currentUser.email;
+      const rb=$('userRoleBadge'); if(rb){ rb.textContent = master?'ADMIN MASTER':adm?'ADMIN':'OPERADOR'; rb.className = 'text-[10px] '+(adm?'text-orange-600':'text-emerald-700')+' uppercase font-black tracking-wider'; }
+      const rp=$('dropdownRolePill'); if(rp){ rp.textContent = master?'Acesso Master (Admin Total)':adm?'Acesso Administrador':'Acesso Operador'; rp.className = 'inline-block mt-1 px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider '+(adm?'bg-orange-100 text-orange-950 border border-orange-300':'bg-emerald-100 text-emerald-950 border border-emerald-300'); }
+      const ini=(nm||'US').substring(0,2).toUpperCase();
+      [['userAvatarImg','userAvatarText'],['modalAvatarImg','modalAvatarInitials']].forEach(([im,tx])=>{
+        const img=$(im), txt=$(tx); if(!img||!txt) return;
+        if(currentUser.photo){ img.src=currentUser.photo; img.classList.remove('hidden'); txt.classList.add('hidden'); }
+        else { img.classList.add('hidden'); txt.textContent=ini; txt.classList.remove('hidden'); }
       });
-
-      // Restrição Específica de Banco de Dados: APENAS o Master Admin pode mexer
-      const masterAdminOnlyElements = document.querySelectorAll('.master-admin-only-btn');
-      masterAdminOnlyElements.forEach(el => {
-        if (isMasterAdmin) {
-          el.classList.remove('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
-          el.removeAttribute('disabled');
-        } else {
-          el.classList.add('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
-          el.setAttribute('disabled', 'true');
-        }
-      });
-
-      const dbWarning = document.getElementById('dbOperadorWarning');
-      if (dbWarning) {
-        if (isMasterAdmin) {
-          dbWarning.classList.add('hidden');
-        } else {
-          dbWarning.classList.remove('hidden');
-          dbWarning.textContent = '* Apenas o Administrador Principal (admin@proflux.com) tem permissão para alterar, limpar ou restaurar o banco de dados.';
-        }
-      }
-
-      const adminUserSection = document.getElementById('adminUserSection');
-      if (adminUserSection) {
-        if (isAdmin) adminUserSection.classList.remove('hidden');
-        else adminUserSection.classList.add('hidden');
-      }
+      const toggle=(sel,on)=>document.querySelectorAll(sel).forEach(el=>{ if(on){ el.classList.remove('opacity-40','cursor-not-allowed','pointer-events-none'); el.removeAttribute('disabled'); } else { el.classList.add('opacity-40','cursor-not-allowed','pointer-events-none'); el.setAttribute('disabled','true'); } });
+      toggle('.admin-only-btn',adm); toggle('.master-admin-only-btn',master);
+      const w=$('dbOperadorWarning'); if(w){ w.classList.toggle('hidden',master); w.textContent='* Apenas o Administrador Principal ('+MASTER_EMAIL+') pode limpar o banco de dados.'; }
+      $('adminUserSection')?.classList.toggle('hidden',!adm);
     }
-
-    function showToast(msg, isSuccess = true) {
-      const toast = document.getElementById('toast');
-      const msgEl = document.getElementById('toastMessage');
-      const icon = document.getElementById('toastIcon');
-      if (!toast || !msgEl || !icon) return;
-
-      msgEl.textContent = msg;
-      icon.className = isSuccess 
-        ? 'ph-bold ph-check-circle text-orange-400 text-base' 
-        : 'ph-bold ph-warning-circle text-rose-400 text-base';
-
-      toast.classList.remove('translate-y-20', 'opacity-0');
-      setTimeout(() => {
-        toast.classList.add('translate-y-20', 'opacity-0');
-      }, 3000);
+    function renderUserList(){
+      const tb=$('userListTableBody'); if(!tb) return;
+      tb.innerHTML=users.map(u=>{
+        const locked = u.id===currentUser?.id || (u.email||'').toLowerCase()===MASTER_EMAIL.toLowerCase();
+        const roleCell = (isAdmin()&&!locked)
+        ? '<select onchange="changeUserRole(\''+u.id+'\',this.value)" class="px-2 py-0.5 border border-emerald-300 rounded text-[11px] font-bold"><option value="operador"'+(u.role==='operador'?' selected':'')+'>OPERADOR</option><option value="admin"'+(u.role==='admin'?' selected':'')+'>ADMIN</option></select>'
+          : '<span class="px-2 py-0.5 rounded text-[10px] font-bold '+(u.role==='admin'?'bg-orange-100 text-orange-900 border border-orange-300':'bg-emerald-100 text-emerald-900 border border-emerald-300')+'">'+u.role.toUpperCase()+'</span>';
+        return '<tr class="hover:bg-orange-50/50"><td class="p-2.5 font-bold text-slate-800">'+escapeHtml(u.name||u.email)+'</td><td class="p-2.5 font-mono text-[11px] text-slate-600">'+escapeHtml(u.email||'')+'</td><td class="p-2.5">'+roleCell+'</td><td class="p-2.5 text-right"><span class="text-slate-400 text-[10px] italic">'+(locked?'Protegido':'Gerencie no Supabase')+'</span></td></tr>';
+      }).join('');
     }
-
-    function getProposalStage(item) {
-      if (item.despachado) {
-        return { key: 'despachado', title: 'Despachado', color: 'emerald' };
-      }
-      if (item.dataFaturamento) {
-        return { key: 'faturado', title: 'Faturado', color: 'orange' };
-      }
-      if (item.op) {
-        return { key: 'producao', title: 'Em Produção (OP)', color: 'emerald' };
-      }
-      if (item.liberacaoFin && !item.liberacaoAdm) {
-        return { key: 'lib_adm', title: 'Aguardando Adm 2º', color: 'teal' };
-      }
-      if (!item.liberacaoFin) {
-        return { key: 'lib_fin', title: 'Aguardando Financeiro', color: 'amber' };
-      }
-      return { key: 'proposta', title: 'Em Aberto', color: 'emerald' };
+    window.changeUserRole = async function(id, papel){
+      if(!isAdmin()){ showToast('Apenas administradores podem alterar perfis.',false); return; }
+      const { data, error } = await sb.from('profiles').update({papel}).eq('id',id).select('id');
+      if(error || !data?.length) showToast('Não foi possível alterar o perfil.',false); else showToast('Perfil atualizado.');
+      loadUsers();
+    };
+    function getProposalStage(i){
+      if(i.despachado) return {key:'despachado',title:'Despachado',color:'emerald'};
+      if(i.dataFaturamento) return {key:'faturado',title:'Faturado',color:'orange'};
+      if(i.op) return {key:'producao',title:'Em Produção (OP)',color:'emerald'};
+      if(i.liberacaoFin && !i.liberacaoAdm) return {key:'lib_adm',title:'Aguardando Adm 2º',color:'teal'};
+      if(!i.liberacaoFin) return {key:'lib_fin',title:'Aguardando Financeiro',color:'amber'};
+      return {key:'proposta',title:'Em Aberto',color:'emerald'};
     }
-
-    function getFilteredPanelRecords() {
-      return records.filter(item => {
-        if (panelFilterStart) {
-          if (!item.dataProposta || item.dataProposta < panelFilterStart) return false;
-        }
-        if (panelFilterEnd) {
-          if (!item.dataProposta || item.dataProposta > panelFilterEnd) return false;
-        }
-
-        if (panelSearchQuery.trim() !== '') {
-          const q = panelSearchQuery.toLowerCase();
-          const matches = 
-            (item.cliente || '').toLowerCase().includes(q) ||
-            (item.proposta || '').toLowerCase().includes(q) ||
-            (item.pv || '').toLowerCase().includes(q) ||
-            (item.op || '').toLowerCase().includes(q) ||
-            (item.item || '').toLowerCase().includes(q);
-          if (!matches) return false;
-        }
+    function matchQuery(i,q){ q=q.toLowerCase(); return ['cliente','proposta','pv','op','item'].some(k=>(i[k]||'').toLowerCase().includes(q)); }
+    function getFilteredPanelRecords(){
+      return records.filter(i=>{
+        if(panelFilterStart && (!i.dataProposta || i.dataProposta<panelFilterStart)) return false;
+        if(panelFilterEnd && (!i.dataProposta || i.dataProposta>panelFilterEnd)) return false;
+        if(panelSearchQuery.trim() && !matchQuery(i,panelSearchQuery)) return false;
         return true;
       });
     }
-
-    function updateStats() {
-      const elTotal = document.getElementById('statTotalProposals');
-      const elFinApp = document.getElementById('statFinApproved');
-      const elFinPen = document.getElementById('statFinPending');
-      const elAdmApp = document.getElementById('statAdmApproved');
-      const elAdmPen = document.getElementById('statAdmPending');
-      const elFat = document.getElementById('statFaturados');
-      const elFatPen = document.getElementById('statFaturamentoPendente');
-      const elDesp = document.getElementById('statDespachados');
-      const elDespPen = document.getElementById('statDespachoPendente');
-      const elSankhya = document.getElementById('statSankhyaDone');
-      const elPloomes = document.getElementById('statPloomesDone');
-
-      const total = records.length;
-      const finApp = records.filter(i => i.liberacaoFin).length;
-      const admApp = records.filter(i => i.liberacaoAdm).length;
-      const faturados = records.filter(i => i.dataFaturamento).length;
-      const despachados = records.filter(i => i.despachado).length;
-      const sankhyaDone = records.filter(i => i.docSankhya).length;
-      const ploomesDone = records.filter(i => i.ploomes).length;
-
-      if (elTotal) elTotal.textContent = total;
-      if (elFinApp) elFinApp.textContent = finApp;
-      if (elFinPen) elFinPen.textContent = `${total - finApp} pendentes`;
-      if (elAdmApp) elAdmApp.textContent = admApp;
-      if (elAdmPen) elAdmPen.textContent = `${total - admApp} pendentes`;
-      if (elFat) elFat.textContent = faturados;
-      if (elFatPen) elFatPen.textContent = `${total - faturados} pendentes`;
-      if (elDesp) elDesp.textContent = despachados;
-      if (elDespPen) elDespPen.textContent = `${total - despachados} a despachar`;
-      if (elSankhya) elSankhya.textContent = sankhyaDone;
-      if (elPloomes) elPloomes.textContent = `${ploomesDone} no Ploomes`;
-
-      const counter = document.getElementById('recordsCounterDisplay');
-      if (counter) counter.textContent = `Exibindo ${getFilteredPanelRecords().length} de ${records.length} registros`;
+    function updateStats(){
+      const t=records.length, c=f=>records.filter(f).length, set=(id,v)=>{ if($(id)) $(id).textContent=v; };
+      const fin=c(i=>i.liberacaoFin), adm=c(i=>i.liberacaoAdm), fat=c(i=>i.dataFaturamento), des=c(i=>i.despachado), sk=c(i=>i.docSankhya), pl=c(i=>i.ploomes);
+      set('statTotalProposals',t); set('statFinApproved',fin); set('statFinPending',(t-fin)+' pendentes'); set('statAdmApproved',adm); set('statAdmPending',(t-adm)+' pendentes');
+      set('statFaturados',fat); set('statFaturamentoPendente',(t-fat)+' pendentes'); set('statDespachados',des); set('statDespachoPendente',(t-des)+' a despachar');
+      set('statSankhyaDone',sk); set('statPloomesDone',pl+' no Ploomes');
+      set('recordsCounterDisplay','Exibindo '+getFilteredPanelRecords().length+' de '+t+' registros');
     }
-
-    function renderHomeSearchResults() {
-      const dropdown = document.getElementById('homeSearchResultsDropdown');
-      const countEl = document.getElementById('homeSearchResultCount');
-      if (!dropdown) return;
-
-      if (!homeSearchQuery || homeSearchQuery.trim() === '') {
-        dropdown.classList.add('hidden');
-        dropdown.innerHTML = '';
-        if (countEl) countEl.classList.add('hidden');
-        return;
-      }
-
-      const q = homeSearchQuery.toLowerCase();
-      const list = records.filter(item => 
-        (item.cliente || '').toLowerCase().includes(q) ||
-        (item.proposta || '').toLowerCase().includes(q) ||
-        (item.pv || '').toLowerCase().includes(q) ||
-        (item.op || '').toLowerCase().includes(q) ||
-        (item.item || '').toLowerCase().includes(q)
-      );
-
-      if (countEl) {
-        countEl.classList.remove('hidden');
-        countEl.textContent = `Encontrados ${list.length} resultado(s) para "${homeSearchQuery}":`;
-      }
-
-      dropdown.classList.remove('hidden');
-
-      if (list.length === 0) {
-        dropdown.innerHTML = `
-          <div class="p-4 text-center text-slate-500 text-xs font-bold">
-            <i class="ph-bold ph-magnifying-glass text-slate-300 text-xl block mb-1"></i>
-            Nenhuma proposta encontrada para "<strong>${escapeHtml(homeSearchQuery)}</strong>".
-          </div>
-        `;
-        return;
-      }
-
-      dropdown.innerHTML = list.map(item => {
-        const stage = getProposalStage(item);
-        const stageColorClass = stage.color === 'orange' ? 'bg-orange-100 text-orange-950 border-orange-300' : `bg-${stage.color}-100 text-${stage.color}-950 border-${stage.color}-300`;
-        return `
-          <div class="p-3.5 hover:bg-orange-50/70 transition-colors cursor-pointer flex items-center justify-between gap-3 group"
-               onclick="selectHomeSearchResult('${item.id}')">
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-2 mb-1">
-                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${stageColorClass} border">
-                  ${stage.title}
-                </span>
-                <span class="font-mono font-bold text-xs text-emerald-950 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300">
-                  ${escapeHtml(item.proposta || 'Sem Proposta')}
-                </span>
-                ${item.pv ? `<span class="font-mono text-[11px] text-slate-600 font-bold">PV: ${escapeHtml(item.pv)}</span>` : ''}
-              </div>
-              <h4 class="font-black text-slate-900 text-sm truncate group-hover:text-orange-700 transition-colors">
-                ${escapeHtml(item.cliente)}
-              </h4>
-              <p class="text-[11px] text-slate-600 truncate mt-0.5 font-bold">
-                ${escapeHtml(item.item || 'Sem item')} • ${formatCurrency(item.valor)}
-              </p>
-            </div>
-            <button type="button" class="px-3.5 py-1.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-slate-950 rounded-xl text-xs font-black shrink-0 flex items-center gap-1 transition-all shadow-xs">
-              <span>Abrir Ficha</span>
-              <i class="ph-bold ph-arrow-right text-xs"></i>
-            </button>
-          </div>
-        `;
+    function renderHomeSearchResults(){
+      const dd=$('homeSearchResultsDropdown'), cnt=$('homeSearchResultCount'); if(!dd) return;
+      if(!homeSearchQuery.trim()){ dd.classList.add('hidden'); dd.innerHTML=''; cnt?.classList.add('hidden'); return; }
+      const list=records.filter(i=>matchQuery(i,homeSearchQuery));
+      if(cnt){ cnt.classList.remove('hidden'); cnt.textContent='Encontrados '+list.length+' resultado(s) para "'+homeSearchQuery+'":'; }
+      dd.classList.remove('hidden');
+      if(!list.length){ dd.innerHTML='<div class="p-4 text-center text-slate-500 text-xs font-bold">Nenhuma proposta encontrada para "<strong>'+escapeHtml(homeSearchQuery)+'</strong>".</div>'; return; }
+      dd.innerHTML=list.map(i=>{
+        const s=getProposalStage(i);
+        const cl = s.color==='orange' ? 'bg-orange-100 text-orange-950 border-orange-300' : 'bg-'+s.color+'-100 text-'+s.color+'-950 border-'+s.color+'-300';
+        return '<div class="p-3.5 hover:bg-orange-50/70 transition-colors cursor-pointer flex items-center justify-between gap-3 group" onclick="selectHomeSearchResult(\''+i.id+'\')">'
+        +'<div class="min-w-0 flex-1"><div class="flex items-center gap-2 mb-1"><span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider '+cl+' border">'+s.title+'</span>'
+        +'<span class="font-mono font-bold text-xs text-emerald-950 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300">'+escapeHtml(i.proposta||'Sem Proposta')+'</span>'
+        +(i.pv?'<span class="font-mono text-[11px] text-slate-600 font-bold">PV: '+escapeHtml(i.pv)+'</span>':'')+'</div>'
+        +'<h4 class="font-black text-slate-900 text-sm truncate group-hover:text-orange-700 transition-colors">'+escapeHtml(i.cliente)+'</h4>'
+        +'<p class="text-[11px] text-slate-600 truncate mt-0.5 font-bold">'+escapeHtml(i.item||'Sem item')+' • '+formatCurrency(i.valor)+'</p></div>'
+        +'<button type="button" class="px-3.5 py-1.5 bg-gradient-to-r from-orange-500 to-amber-500 text-slate-950 rounded-xl text-xs font-black shrink-0 flex items-center gap-1 shadow-xs"><span>Abrir Ficha</span><i class="ph-bold ph-arrow-right text-xs"></i></button></div>';
       }).join('');
     }
-
-    window.selectHomeSearchResult = function(id) {
-      const dropdown = document.getElementById('homeSearchResultsDropdown');
-      if (dropdown) dropdown.classList.add('hidden');
-      openDetailModal(id);
-    };
-
-    function renderTable() {
-      const tbody = document.getElementById('mainTableBody');
-      if (!tbody) return;
-
-      const filtered = getFilteredPanelRecords();
-      if (filtered.length === 0) {
-        tbody.innerHTML = `
-          <tr>
-            <td colspan="19" class="text-center py-12 text-slate-500 font-bold bg-white">
-              <i class="ph-bold ph-folder-notch-open text-3xl mb-2 block text-orange-400"></i>
-              Nenhum registro encontrado no banco de dados.
-            </td>
-          </tr>
-        `;
-        return;
-      }
-
-      const isReadOnly = currentUser?.role === 'operador';
-
-      tbody.innerHTML = filtered.map(item => {
-        const opAllowed = Boolean(item.liberacaoFin && item.liberacaoAdm);
-
-        return `
-          <tr class="transition-colors group bg-white">
-            <td class="py-2.5 px-3 font-black text-slate-950">${escapeHtml(item.cliente)}</td>
-            <td class="py-2.5 px-3 font-mono font-black text-emerald-900">${escapeHtml(item.proposta || '-')}</td>
-            <td class="py-2.5 px-3">
-              <input type="date" value="${item.dataProposta || ''}" ${isReadOnly ? 'disabled' : ''}
-                onchange="updateRecordField('${item.id}', 'dataProposta', this.value)"
-                class="bg-emerald-50/50 border border-emerald-300 rounded px-1.5 py-0.5 text-xs text-slate-900 focus:bg-white disabled:opacity-70 font-bold">
-            </td>
-            <td class="py-2.5 px-3 font-mono font-bold">${escapeHtml(item.pv || '-')}</td>
-            <td class="py-2.5 px-3">
-              <input type="date" value="${item.dataPv || ''}" ${isReadOnly ? 'disabled' : ''}
-                onchange="updateRecordField('${item.id}', 'dataPv', this.value)"
-                class="bg-emerald-50/50 border border-emerald-300 rounded px-1.5 py-0.5 text-xs text-slate-900 focus:bg-white disabled:opacity-70 font-bold">
-            </td>
-            <td class="py-2.5 px-3 text-center">
-              <button onclick="toggleSwitch('${item.id}', 'liberacaoFin')" ${isReadOnly ? 'disabled' : ''}
-                class="px-3 py-1 rounded-full text-[11px] font-black transition-all shadow-xs ${item.liberacaoFin ? 'bg-emerald-700 text-white hover:bg-emerald-800' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}">
-                ${item.liberacaoFin ? 'ON Liberado' : 'OFF Pendente'}
-              </button>
-            </td>
-            <td class="py-2.5 px-3 text-center">
-              <button onclick="toggleSwitch('${item.id}', 'liberacaoAdm')" ${isReadOnly ? 'disabled' : ''}
-                class="px-3 py-1 rounded-full text-[11px] font-black transition-all shadow-xs ${item.liberacaoAdm ? 'bg-orange-600 text-white hover:bg-orange-700' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}">
-                ${item.liberacaoAdm ? 'ON Liberado' : 'OFF Pendente'}
-              </button>
-            </td>
-            <td class="py-2.5 px-3 font-mono font-bold text-slate-950">
-              ${opAllowed ? `
-                <input type="text" value="${escapeHtml(item.op || '')}" ${isReadOnly ? 'disabled' : ''}
-                  onblur="updateRecordField('${item.id}', 'op', this.value)" placeholder="OP..."
-                  class="bg-transparent hover:bg-orange-50/60 focus:bg-white border border-emerald-300 rounded px-1.5 py-0.5 text-xs text-slate-900 font-mono w-24 font-bold">
-              ` : `
-                <span class="inline-flex items-center gap-1 text-[11px] text-orange-950 bg-orange-100 px-2 py-0.5 rounded border border-orange-300 font-extrabold" title="Requer Liberação Financeira e Adm 2º">
-                  <i class="ph-bold ph-lock-key text-orange-600"></i> Bloqueado
-                </span>
-              `}
-            </td>
-            <td class="py-2.5 px-3">
-              ${opAllowed ? `
-                <input type="date" value="${item.dataOp || ''}" ${isReadOnly ? 'disabled' : ''}
-                  onchange="updateRecordField('${item.id}', 'dataOp', this.value)"
-                  class="bg-emerald-50/50 border border-emerald-300 rounded px-1.5 py-0.5 text-xs text-slate-900 focus:bg-white disabled:opacity-70 font-bold">
-              ` : `
-                <span class="text-slate-400 text-[11px] italic font-semibold">Sem Liberações</span>
-              `}
-            </td>
-            <td class="py-2.5 px-3">
-              <input type="text" value="${escapeHtml(item.item || '')}" ${isReadOnly ? 'disabled' : ''}
-                onblur="updateRecordField('${item.id}', 'item', this.value)" placeholder="Item..."
-                class="bg-transparent hover:bg-orange-50/60 focus:bg-white border border-emerald-300 rounded px-1.5 py-0.5 text-xs text-slate-900 font-bold w-40 truncate">
-            </td>
-            <td class="py-2.5 px-3">
-              <input type="number" step="0.01" value="${item.valor !== undefined ? item.valor : ''}" ${isReadOnly ? 'disabled' : ''}
-                onblur="updateRecordField('${item.id}', 'valor', parseFloat(this.value) || 0)" placeholder="0.00"
-                class="bg-transparent hover:bg-orange-50/60 focus:bg-white border border-emerald-300 rounded px-1.5 py-0.5 text-xs text-orange-700 font-mono font-black w-24">
-            </td>
-            <td class="py-2.5 px-3 text-center">
-              <div class="inline-flex items-center gap-1 bg-orange-50 border border-orange-300 rounded-lg px-2 py-0.5">
-                <input type="date" value="${item.dataFaturamento || ''}" ${isReadOnly ? 'disabled' : ''}
-                  onchange="updateRecordField('${item.id}', 'dataFaturamento', this.value)"
-                  class="bg-transparent text-xs text-orange-950 font-bold focus:outline-none disabled:opacity-70">
-                ${item.dataFaturamento && !isReadOnly ? `
-                  <button onclick="updateRecordField('${item.id}', 'dataFaturamento', '')" class="text-slate-400 hover:text-rose-600" title="Limpar faturamento">
-                    <i class="ph-bold ph-x text-xs"></i>
-                  </button>
-                ` : ''}
-              </div>
-            </td>
-            <td class="py-2.5 px-3 text-center">
-              <button onclick="toggleSwitch('${item.id}', 'despachado')" ${isReadOnly ? 'disabled' : ''}
-                class="px-2.5 py-1 rounded-full text-[11px] font-black transition-all shadow-xs ${item.despachado ? 'bg-emerald-800 text-white hover:bg-emerald-900' : 'bg-orange-100 text-orange-950 hover:bg-orange-200 border border-orange-300'}">
-                ${item.despachado ? 'Despachado' : 'Não Despachado'}
-              </button>
-            </td>
-            <td class="py-2.5 px-3">
-              <input type="date" value="${item.dataDespacho || ''}" ${isReadOnly ? 'disabled' : ''}
-                onchange="updateRecordField('${item.id}', 'dataDespacho', this.value)"
-                class="bg-emerald-50/50 border border-emerald-300 rounded px-1.5 py-0.5 text-xs text-slate-900 focus:bg-white disabled:opacity-70 font-bold">
-            </td>
-            <td class="py-2.5 px-3">
-              <div class="flex items-center gap-1">
-                <input type="text" value="${escapeHtml(item.ploomesLink || '')}" ${isReadOnly ? 'disabled' : ''}
-                  onblur="updateRecordField('${item.id}', 'ploomesLink', this.value)" placeholder="Link/ID Ploomes..."
-                  class="bg-transparent hover:bg-orange-50/60 focus:bg-white border border-emerald-300 rounded px-1.5 py-0.5 text-xs text-slate-900 w-28 truncate font-medium">
-                ${item.ploomesLink ? `
-                  <a href="${item.ploomesLink.startsWith('http') ? item.ploomesLink : 'https://' + item.ploomesLink}" target="_blank" rel="noopener noreferrer" class="text-orange-600 hover:text-orange-800 p-1" title="Abrir Ploomes">
-                    <i class="ph-bold ph-arrow-square-out text-sm"></i>
-                  </a>
-                ` : ''}
-              </div>
-            </td>
-            <td class="py-2.5 px-3 text-center">
-              <button onclick="toggleSwitch('${item.id}', 'ploomes')" ${isReadOnly ? 'disabled' : ''}
-                class="px-2.5 py-1 rounded-full text-[11px] font-black transition-all shadow-xs ${item.ploomes ? 'bg-orange-600 text-white' : 'bg-slate-200 text-slate-700'}">
-                ${item.ploomes ? 'ON' : 'OFF'}
-              </button>
-            </td>
-            <td class="py-2.5 px-3 text-center">
-              <button onclick="toggleSwitch('${item.id}', 'docSankhya')" ${isReadOnly ? 'disabled' : ''}
-                class="px-2.5 py-1 rounded-full text-[11px] font-black transition-all shadow-xs ${item.docSankhya ? 'bg-emerald-700 text-white' : 'bg-slate-200 text-slate-700'}">
-                ${item.docSankhya ? 'ON' : 'OFF'}
-              </button>
-            </td>
-            <td class="py-2.5 px-3 text-center">
-              ${item.arquivoNome ? `
-                <div class="inline-flex items-center gap-1.5 bg-orange-50 px-2 py-1 rounded-lg border border-orange-200">
-                  <button onclick="downloadAttachment('${item.id}')" class="text-orange-950 hover:text-orange-700 font-bold flex items-center gap-1 text-[11px]" title="Baixar/Visualizar arquivo">
-                    <i class="ph-bold ph-download-simple text-sm text-orange-600"></i>
-                    <span class="max-w-[100px] truncate">${escapeHtml(item.arquivoNome)}</span>
-                  </button>
-                  ${!isReadOnly ? `
-                    <button onclick="removeAttachment('${item.id}')" class="text-slate-400 hover:text-rose-600 p-0.5 ml-0.5" title="Remover anexo">
-                      <i class="ph-bold ph-trash text-xs"></i>
-                    </button>
-                  ` : ''}
-                </div>
-              ` : `
-                ${!isReadOnly ? `
-                  <label class="cursor-pointer inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-100/80 hover:bg-orange-100 text-emerald-950 text-[11px] font-bold border border-emerald-300 transition-colors">
-                    <i class="ph-bold ph-paperclip text-orange-600"></i>
-                    <span>+ Anexar</span>
-                    <input type="file" class="hidden" onchange="attachFileToRecord('${item.id}', this)">
-                  </label>
-                ` : '<span class="text-slate-400 text-[11px]">Sem arquivo</span>'}
-              `}
-            </td>
-            <td class="py-2.5 px-3 text-center">
-              <div class="flex items-center justify-center gap-1">
-                <button onclick="openDetailModal('${item.id}')" class="p-1 rounded-lg text-emerald-800 hover:text-orange-600 hover:bg-orange-50" title="Ver Ficha">
-                  <i class="ph-bold ph-eye text-base"></i>
-                </button>
-                ${!isReadOnly ? `
-                  <button onclick="openEditModal('${item.id}')" class="p-1 rounded-lg text-emerald-800 hover:text-orange-600 hover:bg-orange-50" title="Editar">
-                    <i class="ph-bold ph-pencil-simple text-base"></i>
-                  </button>
-                  <button onclick="deleteRecord('${item.id}')" class="p-1 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50" title="Excluir">
-                    <i class="ph-bold ph-trash text-base"></i>
-                  </button>
-                ` : ''}
-              </div>
-            </td>
-          </tr>
-        `;
+    window.selectHomeSearchResult = id => { $('homeSearchResultsDropdown')?.classList.add('hidden'); openDetailModal(id); };
+    function renderTable(){
+      const tb=$('mainTableBody'); if(!tb) return;
+      const list=getFilteredPanelRecords();
+      if(!list.length){ tb.innerHTML='<tr><td colspan="19" class="text-center py-12 text-slate-500 font-bold bg-white"><i class="ph-bold ph-folder-notch-open text-3xl mb-2 block text-orange-400"></i>Nenhum registro encontrado no banco de dados.</td></tr>'; return; }
+      const ro=!isAdmin();
+      const dis=ro?'disabled':'';
+      const dIn=(id,f,v)=>'<input type="date" value="'+(v||'')+'" '+dis+' onchange="updateRecordField(\''+id+'\',\''+f+'\',this.value)" class="bg-emerald-50/50 border border-emerald-300 rounded px-1.5 py-0.5 text-xs text-slate-900 focus:bg-white disabled:opacity-70 font-bold">';
+      const tIn=(id,f,v,ph,w)=>'<input type="text" value="'+escapeHtml(v||'')+'" '+dis+' onblur="updateRecordField(\''+id+'\',\''+f+'\',this.value)" placeholder="'+ph+'" class="bg-transparent hover:bg-orange-50/60 focus:bg-white border border-emerald-300 rounded px-1.5 py-0.5 text-xs text-slate-900 font-bold '+w+'">';
+      const sw=(id,f,on,tOn,tOff,cOn,cOff)=>'<button onclick="toggleSwitch(\''+id+'\',\''+f+'\')" '+dis+' class="px-3 py-1 rounded-full text-[11px] font-black transition-all shadow-xs '+(on?cOn:cOff)+'">'+(on?tOn:tOff)+'</button>';
+      const grey='bg-slate-200 text-slate-700 hover:bg-slate-300';
+      tb.innerHTML=list.map(i=>{
+        const id=i.id, opOk=i.liberacaoFin&&i.liberacaoAdm;
+        const href=i.ploomesLink?(i.ploomesLink.startsWith('http')?i.ploomesLink:'https://'+i.ploomesLink):'';
+        const arq = i.arquivoNome
+        ? '<div class="inline-flex items-center gap-1.5 bg-orange-50 px-2 py-1 rounded-lg border border-orange-200"><button onclick="downloadAttachment(\''+id+'\')" class="text-orange-950 hover:text-orange-700 font-bold flex items-center gap-1 text-[11px]" title="Baixar arquivo"><i class="ph-bold ph-download-simple text-sm text-orange-600"></i><span class="max-w-[100px] truncate">'+escapeHtml(i.arquivoNome)+'</span></button>'+(ro?'':'<button onclick="removeAttachment(\''+id+'\')" class="text-slate-400 hover:text-rose-600 p-0.5 ml-0.5" title="Remover anexo"><i class="ph-bold ph-trash text-xs"></i></button>')+'</div>'
+          : (ro?'<span class="text-slate-400 text-[11px]">Sem arquivo</span>':'<label class="cursor-pointer inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-100/80 hover:bg-orange-100 text-emerald-950 text-[11px] font-bold border border-emerald-300 transition-colors"><i class="ph-bold ph-paperclip text-orange-600"></i><span>+ Anexar</span><input type="file" class="hidden" onchange="attachFileToRecord(\''+id+'\',this)"></label>');
+        return '<tr class="transition-colors group bg-white">'
+        +'<td class="py-2.5 px-3 font-black text-slate-950">'+escapeHtml(i.cliente)+'</td>'
+        +'<td class="py-2.5 px-3 font-mono font-black text-emerald-900">'+escapeHtml(i.proposta||'-')+'</td>'
+        +'<td class="py-2.5 px-3">'+dIn(id,'dataProposta',i.dataProposta)+'</td>'
+        +'<td class="py-2.5 px-3 font-mono font-bold">'+escapeHtml(i.pv||'-')+'</td>'
+        +'<td class="py-2.5 px-3">'+dIn(id,'dataPv',i.dataPv)+'</td>'
+        +'<td class="py-2.5 px-3 text-center">'+sw(id,'liberacaoFin',i.liberacaoFin,'ON Liberado','OFF Pendente','bg-emerald-700 text-white hover:bg-emerald-800',grey)+'</td>'
+        +'<td class="py-2.5 px-3 text-center">'+sw(id,'liberacaoAdm',i.liberacaoAdm,'ON Liberado','OFF Pendente','bg-orange-600 text-white hover:bg-orange-700',grey)+'</td>'
+        +'<td class="py-2.5 px-3 font-mono font-bold text-slate-950">'+(opOk?tIn(id,'op',i.op,'OP...','w-24 font-mono'):'<span class="inline-flex items-center gap-1 text-[11px] text-orange-950 bg-orange-100 px-2 py-0.5 rounded border border-orange-300 font-extrabold" title="Requer Liberação Financeira e Adm 2º"><i class="ph-bold ph-lock-key text-orange-600"></i> Bloqueado</span>')+'</td>'
+        +'<td class="py-2.5 px-3">'+(opOk?dIn(id,'dataOp',i.dataOp):'<span class="text-slate-400 text-[11px] italic font-semibold">Sem Liberações</span>')+'</td>'
+        +'<td class="py-2.5 px-3">'+tIn(id,'item',i.item,'Item...','w-40 truncate')+'</td>'
+        +'<td class="py-2.5 px-3"><input type="number" step="0.01" value="'+(i.valor!==undefined?i.valor:'')+'" '+dis+' onblur="updateRecordField(\''+id+'\',\'valor\',parseFloat(this.value)||0)" placeholder="0.00" class="bg-transparent hover:bg-orange-50/60 focus:bg-white border border-emerald-300 rounded px-1.5 py-0.5 text-xs text-orange-700 font-mono font-black w-24"></td>'
+        +'<td class="py-2.5 px-3 text-center"><div class="inline-flex items-center gap-1 bg-orange-50 border border-orange-300 rounded-lg px-2 py-0.5"><input type="date" value="'+(i.dataFaturamento||'')+'" '+dis+' onchange="updateRecordField(\''+id+'\',\'dataFaturamento\',this.value)" class="bg-transparent text-xs text-orange-950 font-bold focus:outline-none disabled:opacity-70">'+(i.dataFaturamento&&!ro?'<button onclick="updateRecordField(\''+id+'\',\'dataFaturamento\',\'\')" class="text-slate-400 hover:text-rose-600" title="Limpar faturamento"><i class="ph-bold ph-x text-xs"></i></button>':'')+'</div></td>'
+        +'<td class="py-2.5 px-3 text-center">'+sw(id,'despachado',i.despachado,'Despachado','Não Despachado','bg-emerald-800 text-white hover:bg-emerald-900','bg-orange-100 text-orange-950 hover:bg-orange-200 border border-orange-300')+'</td>'
+        +'<td class="py-2.5 px-3">'+dIn(id,'dataDespacho',i.dataDespacho)+'</td>'
+        +'<td class="py-2.5 px-3"><div class="flex items-center gap-1">'+tIn(id,'ploomesLink',i.ploomesLink,'Link/ID Ploomes...','w-28 truncate')+(href?'<a href="'+escapeHtml(href)+'" target="_blank" rel="noopener noreferrer" class="text-orange-600 hover:text-orange-800 p-1" title="Abrir Ploomes"><i class="ph-bold ph-arrow-square-out text-sm"></i></a>':'')+'</div></td>'
+        +'<td class="py-2.5 px-3 text-center">'+sw(id,'ploomes',i.ploomes,'ON','OFF','bg-orange-600 text-white','bg-slate-200 text-slate-700')+'</td>'
+        +'<td class="py-2.5 px-3 text-center">'+sw(id,'docSankhya',i.docSankhya,'ON','OFF','bg-emerald-700 text-white','bg-slate-200 text-slate-700')+'</td>'
+        +'<td class="py-2.5 px-3 text-center">'+arq+'</td>'
+        +'<td class="py-2.5 px-3 text-center"><div class="flex items-center justify-center gap-1"><button onclick="openDetailModal(\''+id+'\')" class="p-1 rounded-lg text-emerald-800 hover:text-orange-600 hover:bg-orange-50" title="Ver Ficha"><i class="ph-bold ph-eye text-base"></i></button>'
+        +(ro?'':'<button onclick="openEditModal(\''+id+'\')" class="p-1 rounded-lg text-emerald-800 hover:text-orange-600 hover:bg-orange-50" title="Editar"><i class="ph-bold ph-pencil-simple text-base"></i></button><button onclick="deleteRecord(\''+id+'\')" class="p-1 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50" title="Excluir"><i class="ph-bold ph-trash text-base"></i></button>')
+        +'</div></td></tr>';
       }).join('');
     }
-
-    window.openDetailModal = function(id) {
-      const item = records.find(r => r.id === id);
-      if (!item) return;
-
-      const modal = document.getElementById('proposalDetailModal');
-      const stage = getProposalStage(item);
-
-      const badge = document.getElementById('detailBadgeStatus');
-      badge.textContent = stage.title;
-      badge.className = `inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-orange-100 text-orange-950 mb-2 border border-orange-300`;
-
-      document.getElementById('detailClienteName').textContent = item.cliente || '-';
-      document.getElementById('detailSubtitle').textContent = `Proposta: ${item.proposta || 'S/N'} • Pedido PV: ${item.pv || 'S/N'}`;
-
-      const resumoEl = document.getElementById('detailStatusResumo');
-      if (resumoEl) resumoEl.textContent = stage.title;
-
-      const opBadge = document.getElementById('detailHasOpBadge');
-      if (opBadge) {
-        opBadge.innerHTML = item.op 
-          ? `<i class="ph-bold ph-check-circle text-emerald-700"></i> OP: <strong>${escapeHtml(item.op)}</strong>`
-          : `<i class="ph-bold ph-clock text-orange-600"></i> Sem OP gerada`;
-      }
-
-      const fatBadge = document.getElementById('detailHasFatBadge');
-      if (fatBadge) {
-        fatBadge.innerHTML = item.dataFaturamento
-          ? `<i class="ph-bold ph-receipt text-orange-700"></i> Faturado em ${formatDate(item.dataFaturamento)}`
-          : `<i class="ph-bold ph-clock text-orange-600"></i> Faturamento Pendente`;
-      }
-
-      // Bloco Comercial
-      document.getElementById('detailPropostaNum').textContent = item.proposta || '-';
-      document.getElementById('detailDataProposta').textContent = formatDate(item.dataProposta);
-      document.getElementById('detailPvNum').textContent = item.pv || '-';
-      document.getElementById('detailDataPv').textContent = formatDate(item.dataPv);
-      document.getElementById('detailItemDesc').textContent = item.item || '-';
-      document.getElementById('detailValor').textContent = formatCurrency(item.valor);
-
-      // Bloco Produção & Logística
-      document.getElementById('detailOpNum').textContent = item.op || 'Aguardando Liberação e OP';
-      document.getElementById('detailDataOp').textContent = formatDate(item.dataOp);
-      
-      const elStatusFat = document.getElementById('detailStatusFat');
-      if (item.dataFaturamento) {
-        elStatusFat.textContent = 'Faturado';
-        elStatusFat.className = 'font-bold text-orange-700';
-      } else {
-        elStatusFat.textContent = 'Pendente de Faturamento';
-        elStatusFat.className = 'font-bold text-slate-500';
-      }
-      document.getElementById('detailDataFat').textContent = formatDate(item.dataFaturamento);
-
-      const elStatusDesp = document.getElementById('detailStatusDesp');
-      if (item.despachado) {
-        elStatusDesp.textContent = 'Despachado';
-        elStatusDesp.className = 'font-bold text-emerald-800';
-      } else {
-        elStatusDesp.textContent = 'Não Despachado (Em andamento)';
-        elStatusDesp.className = 'font-bold text-slate-500';
-      }
-      document.getElementById('detailDataDesp').textContent = formatDate(item.dataDespacho);
-
-      // Badges
-      const libBadges = document.getElementById('detailLiberaçõesBadges');
-      libBadges.innerHTML = `
-        <span class="px-2 py-0.5 rounded-lg text-[11px] font-bold ${item.liberacaoFin ? 'bg-emerald-100 text-emerald-950 border border-emerald-300' : 'bg-slate-100 text-slate-600'}">
-          ${item.liberacaoFin ? '✓ Lib. Fin 1º (OK)' : '✕ Fin Pendente'}
-        </span>
-        <span class="px-2 py-0.5 rounded-lg text-[11px] font-bold ${item.liberacaoAdm ? 'bg-orange-100 text-orange-950 border border-orange-300' : 'bg-slate-100 text-slate-600'}">
-          ${item.liberacaoAdm ? '✓ Lib. Adm 2º (OK)' : '✕ Adm Pendente'}
-        </span>
-      `;
-
-      const intBadges = document.getElementById('detailIntegracoesBadges');
-      intBadges.innerHTML = `
-        <span class="px-2 py-0.5 rounded-lg text-[11px] font-bold ${item.docSankhya ? 'bg-emerald-100 text-emerald-950 border border-emerald-300' : 'bg-slate-100 text-slate-600'}">
-          ${item.docSankhya ? '✓ Sankhya (OK)' : '✕ Sankhya Pendente'}
-        </span>
-        <span class="px-2 py-0.5 rounded-lg text-[11px] font-bold ${item.ploomes ? 'bg-orange-100 text-orange-950 border border-orange-300' : 'bg-slate-100 text-slate-600'}">
-          ${item.ploomes ? '✓ Ploomes (Feito)' : '✕ Ploomes Pendente'}
-        </span>
-        ${item.ploomesLink ? `
-          <a href="${item.ploomesLink.startsWith('http') ? item.ploomesLink : 'https://' + item.ploomesLink}" target="_blank" class="text-orange-700 font-bold hover:underline flex items-center gap-1 mt-1">
-            <i class="ph-bold ph-arrow-square-out"></i> Acessar Ploomes
-          </a>
-        ` : ''}
-      `;
-
-      const arqBox = document.getElementById('detailArquivoBox');
-      if (item.arquivoNome) {
-        arqBox.innerHTML = `
-          <button onclick="downloadAttachment('${item.id}')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-100 text-orange-950 hover:bg-orange-200 font-bold text-xs border border-orange-300 transition-colors shadow-xs">
-            <i class="ph-bold ph-download-simple text-sm text-orange-700"></i>
-            <span class="truncate max-w-[160px]">${escapeHtml(item.arquivoNome)}</span>
-          </button>
-        `;
-      } else {
-        arqBox.innerHTML = `<span class="text-slate-400 text-xs">Nenhum arquivo anexado</span>`;
-      }
-
-      const btnEdit = document.getElementById('btnEditFromDetailModal');
-      if (btnEdit) {
-        btnEdit.onclick = () => {
-          modal.classList.add('hidden');
-          openEditModal(item.id);
-        };
-      }
-
+    window.openDetailModal = function(id){
+      const item=records.find(r=>r.id===id); if(!item) return;
+      const modal=$('proposalDetailModal'), stage=getProposalStage(item);
+      const setT=(i,v)=>{ if($(i)) $(i).textContent=v; };
+      setT('detailBadgeStatus',stage.title); setT('detailClienteName',item.cliente||'-');
+      setT('detailSubtitle','Proposta: '+(item.proposta||'S/N')+' • Pedido PV: '+(item.pv||'S/N'));
+      setT('detailStatusResumo',stage.title);
+      $('detailHasOpBadge').innerHTML = item.op ? '<i class="ph-bold ph-check-circle text-emerald-700"></i> OP: <strong>'+escapeHtml(item.op)+'</strong>' : '<i class="ph-bold ph-clock text-orange-600"></i> Sem OP gerada';
+      $('detailHasFatBadge').innerHTML = item.dataFaturamento ? '<i class="ph-bold ph-receipt text-orange-700"></i> Faturado em '+formatDate(item.dataFaturamento) : '<i class="ph-bold ph-clock text-orange-600"></i> Faturamento Pendente';
+      setT('detailPropostaNum',item.proposta||'-'); setT('detailDataProposta',formatDate(item.dataProposta)); setT('detailPvNum',item.pv||'-'); setT('detailDataPv',formatDate(item.dataPv));
+      setT('detailItemDesc',item.item||'-'); setT('detailValor',formatCurrency(item.valor));
+      setT('detailOpNum',item.op||'Aguardando Liberação e OP'); setT('detailDataOp',formatDate(item.dataOp));
+      const sf=$('detailStatusFat'); sf.textContent=item.dataFaturamento?'Faturado':'Pendente de Faturamento'; sf.className='font-bold '+(item.dataFaturamento?'text-orange-700':'text-slate-500');
+      setT('detailDataFat',formatDate(item.dataFaturamento));
+      const sd=$('detailStatusDesp'); sd.textContent=item.despachado?'Despachado':'Não Despachado (Em andamento)'; sd.className='font-bold '+(item.despachado?'text-emerald-800':'text-slate-500');
+      setT('detailDataDesp',formatDate(item.dataDespacho));
+      const bd=(ok,t1,t2,c)=>'<span class="px-2 py-0.5 rounded-lg text-[11px] font-bold '+(ok?c:'bg-slate-100 text-slate-600')+'">'+(ok?t1:t2)+'</span>';
+      const gr='bg-emerald-100 text-emerald-950 border border-emerald-300', or='bg-orange-100 text-orange-950 border border-orange-300';
+      $('detailLiberaçõesBadges').innerHTML = bd(item.liberacaoFin,'✓ Lib. Fin 1º (OK)','✕ Fin Pendente',gr)+bd(item.liberacaoAdm,'✓ Lib. Adm 2º (OK)','✕ Adm Pendente',or);
+      const href=item.ploomesLink?(item.ploomesLink.startsWith('http')?item.ploomesLink:'https://'+item.ploomesLink):'';
+      $('detailIntegracoesBadges').innerHTML = bd(item.docSankhya,'✓ Sankhya (OK)','✕ Sankhya Pendente',gr)+bd(item.ploomes,'✓ Ploomes (Feito)','✕ Ploomes Pendente',or)+(href?'<a href="'+escapeHtml(href)+'" target="_blank" rel="noopener noreferrer" class="text-orange-700 font-bold hover:underline flex items-center gap-1 mt-1"><i class="ph-bold ph-arrow-square-out"></i> Acessar Ploomes</a>':'');
+      $('detailArquivoBox').innerHTML = item.arquivoNome ? '<button onclick="downloadAttachment(\''+item.id+'\')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-100 text-orange-950 hover:bg-orange-200 font-bold text-xs border border-orange-300 transition-colors shadow-xs"><i class="ph-bold ph-download-simple text-sm text-orange-700"></i><span class="truncate max-w-[160px]">'+escapeHtml(item.arquivoNome)+'</span></button>' : '<span class="text-slate-400 text-xs">Nenhum arquivo anexado</span>';
+      const be=$('btnEditFromDetailModal'); if(be) be.onclick=()=>{ modal.classList.add('hidden'); openEditModal(item.id); };
       modal.classList.remove('hidden');
     };
-
-    function closeDetailModal() {
-      const modal = document.getElementById('proposalDetailModal');
-      if (modal) modal.classList.add('hidden');
-    }
-
-    window.attachFileToRecord = function(id, inputElement) {
-      if (currentUser?.role === 'operador') {
-        showToast('Operadores não possuem permissão de anexar arquivos.', false);
-        return;
-      }
-      const file = inputElement.files?.[0];
-      if (!file) return;
-
-      if (file.size > 3 * 1024 * 1024) {
-        showToast('O arquivo selecionado deve ter no máximo 3MB.', false);
-        return;
-      }
-
-      const record = records.find(r => r.id === id);
-      if (!record) return;
-
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        record.arquivoNome = file.name;
-        record.arquivoData = e.target.result;
-        renderTable();
-        renderHomeSearchResults();
-        showToast(`Arquivo "${file.name}" anexado com sucesso!`);
-      };
-      reader.readAsDataURL(file);
+    function closeDetailModal(){ $('proposalDetailModal')?.classList.add('hidden'); }
+    window.attachFileToRecord = async function(id,input){
+      if(!requireAdmin()) return;
+      const file=input.files?.[0]; if(!file) return;
+      if(file.size>3*1024*1024){ showToast('O arquivo selecionado deve ter no máximo 3MB.',false); return; }
+      const rec=records.find(r=>r.id===id); if(!rec) return;
+      try{
+        const path=await uploadFile(id,file); const old=rec.arquivoPath;
+        if(await patchRecord(id,{arquivoNome:file.name,arquivoPath:path})){ await removeFile(old); showToast('Arquivo "'+file.name+'" anexado com sucesso!'); refreshAll(); }
+      }catch(e){ showToast('Erro ao enviar arquivo: '+e.message,false); }
     };
-
-    window.removeAttachment = function(id) {
-      if (currentUser?.role === 'operador') {
-        showToast('Operadores não possuem permissão para remover arquivos.', false);
-        return;
-      }
-      const record = records.find(r => r.id === id);
-      if (!record) return;
-
-      record.arquivoNome = '';
-      record.arquivoData = '';
-      renderTable();
-      renderHomeSearchResults();
-      showToast('Arquivo removido com sucesso.');
+    window.removeAttachment = async function(id){
+      if(!requireAdmin()) return;
+      const rec=records.find(r=>r.id===id); if(!rec) return;
+      const old=rec.arquivoPath;
+      if(await patchRecord(id,{arquivoNome:'',arquivoPath:''})){ await removeFile(old); refreshAll(); showToast('Arquivo removido com sucesso.'); }
     };
-
-    window.downloadAttachment = function(id) {
-      const record = records.find(r => r.id === id);
-      if (!record || !record.arquivoNome) {
-        showToast('Nenhum anexo encontrado.', false);
-        return;
-      }
-
-      if (record.arquivoData) {
-        const link = document.createElement('a');
-        link.href = record.arquivoData;
-        link.download = record.arquivoNome;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      } else {
-        const blob = new Blob([`Documento anexado: ${record.arquivoNome}\nCliente: ${record.cliente}\nProposta: ${record.proposta}`], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = record.arquivoNome;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-      }
-      showToast(`Baixando "${record.arquivoNome}"...`);
+    window.downloadAttachment = async function(id){
+      const rec=records.find(r=>r.id===id);
+      if(!rec||!rec.arquivoPath){ showToast('Nenhum anexo encontrado.',false); return; }
+      const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(rec.arquivoPath,60,{download:rec.arquivoNome});
+      if(error){ showToast('Erro ao abrir anexo: '+error.message,false); return; }
+      const a=document.createElement('a'); a.href=data.signedUrl; a.download=rec.arquivoNome; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      showToast('Baixando "'+rec.arquivoNome+'"...');
     };
-
-    window.toggleSwitch = function(id, field) {
-      if (currentUser?.role === 'operador') {
-        showToast('Operadores não possuem permissão de alteração.', false);
-        return;
-      }
-      const record = records.find(r => r.id === id);
-      if (!record) return;
-
-      if ((field === 'liberacaoFin' || field === 'liberacaoAdm') && record[field]) {
-        if (record.op) {
-          showToast('A OP já foi gerada. Remova o número da OP antes de retirar a liberação.', false);
-          return;
-        }
-      }
-
-      record[field] = !record[field];
-
-      if (field === 'despachado') {
-        if (record.despachado && !record.dataDespacho) {
-          record.dataDespacho = new Date().toISOString().split('T')[0];
-        } else if (!record.despachado) {
-          record.dataDespacho = '';
-        }
-      }
-
-      renderHomeSearchResults();
-      renderTable();
-      updateStats();
-      showToast('Status atualizado.');
+    window.toggleSwitch = async function(id,field){
+      if(!requireAdmin()) return;
+      const rec=records.find(r=>r.id===id); if(!rec) return;
+      if((field==='liberacaoFin'||field==='liberacaoAdm') && rec[field] && rec.op){ showToast('A OP já foi gerada. Remova o número da OP antes de retirar a liberação.',false); return; }
+      const patch={[field]:!rec[field]};
+      if(field==='despachado'){ patch.dataDespacho = patch.despachado ? (rec.dataDespacho||new Date().toISOString().split('T')[0]) : ''; }
+      if(await patchRecord(id,patch)){ refreshAll(); showToast('Status atualizado.'); }
     };
-
-    window.updateRecordField = function(id, field, value) {
-      if (currentUser?.role === 'operador') {
-        showToast('Operadores não possuem permissão de alteração.', false);
-        return;
-      }
-      const record = records.find(r => r.id === id);
-      if (!record) return;
-
-      if ((field === 'op' || field === 'dataOp') && value) {
-        if (!record.liberacaoFin || !record.liberacaoAdm) {
-          showToast('Sem liberação Financeiro (1º) e Adm (2º), a OP não pode ser gerada.', false);
-          renderTable();
-          return;
-        }
-      }
-
-      record[field] = value;
-      renderHomeSearchResults();
-      renderTable();
-      updateStats();
-      showToast('Registro atualizado.');
+    window.updateRecordField = async function(id,field,value){
+      if(!requireAdmin()) return;
+      const rec=records.find(r=>r.id===id); if(!rec) return;
+      if(rec[field]===value || (rec[field]===''&&!value)) return;
+      if((field==='op'||field==='dataOp') && value && (!rec.liberacaoFin||!rec.liberacaoAdm)){ showToast('Sem liberação Financeiro (1º) e Adm (2º), a OP não pode ser gerada.',false); renderTable(); return; }
+      if(await patchRecord(id,{[field]:value})){ refreshAll(); showToast('Registro atualizado.'); }
     };
-
-    window.deleteRecord = function(id) {
-      if (currentUser?.role === 'operador') {
-        showToast('Operadores não podem excluir registros.', false);
-        return;
-      }
-      records = records.filter(r => r.id !== id);
-      renderHomeSearchResults();
-      renderTable();
-      updateStats();
-      showToast('Registro excluído com sucesso.');
+    window.deleteRecord = async function(id){
+      if(!requireAdmin()) return;
+      const rec=records.find(r=>r.id===id); if(!rec) return;
+      if(!confirm('Excluir a proposta de "'+rec.cliente+'"? Esta ação não pode ser desfeita.')) return;
+      const { data, error } = await sb.from('propostas').delete().eq('id',id).select('id');
+      if(error||!data?.length){ showToast(error?'Erro ao excluir: '+error.message:'Sem permissão para excluir.',false); return; }
+      await removeFile(rec.arquivoPath);
+      records=records.filter(r=>r.id!==id); refreshAll(); showToast('Registro excluído com sucesso.');
     };
-
-    function switchView(viewName) {
-      const viewHome = document.getElementById('viewHome');
-      const viewProposals = document.getElementById('viewProposals');
-
-      if (viewName === 'home') {
-        if (viewHome) viewHome.classList.remove('hidden');
-        if (viewProposals) viewProposals.classList.add('hidden');
-        renderHomeSearchResults();
-      } else {
-        if (viewHome) viewHome.classList.add('hidden');
-        if (viewProposals) viewProposals.classList.remove('hidden');
-        renderTable();
-      }
-      updateStats();
+    function switchView(v){
+      $('viewHome')?.classList.toggle('hidden',v!=='home'); $('viewProposals')?.classList.toggle('hidden',v==='home');
+      refreshAll();
     }
-
-    const clearDbModal = document.getElementById('clearDbConfirmModal');
-
-    function openClearDbModal() {
-      if (currentUser?.email?.toLowerCase() !== 'admin@proflux.com') {
-        showToast('Apenas o Administrador Principal (admin@proflux.com) pode limpar o banco de dados.', false);
-        return;
-      }
-      if (clearDbModal) clearDbModal.classList.remove('hidden');
+    function syncOpFieldsState(){
+      const ok=Boolean($('formLiberacaoFin')?.checked && $('formLiberacaoAdm')?.checked);
+      const opI=$('formOp'), dI=$('formDataOp'), hint=$('opLockHint');
+      [opI,dI].forEach(el=>{ if(!el) return; el.disabled=!ok; if(!ok) el.value=''; el.classList.toggle('bg-slate-100',!ok); el.classList.toggle('text-slate-400',!ok); el.classList.toggle('cursor-not-allowed',!ok); });
+      if(opI) opI.placeholder = ok ? 'Ex: OP-4401' : 'Bloqueado (exige liberações 1º e 2º)';
+      if(hint) hint.innerHTML = ok ? '<span class="text-emerald-800 font-black flex items-center gap-1"><i class="ph-bold ph-lock-key-open text-orange-500"></i> Liberações concedidas: Campos de OP desbloqueados para preenchimento.</span>' : '<span class="text-orange-800 font-black flex items-center gap-1"><i class="ph-bold ph-lock-key text-orange-600"></i> Sem liberação financeira e adm 2º: Não é gerado o número de OP nem a Data da OP.</span>';
     }
-
-    function closeClearDbModal() {
-      if (clearDbModal) clearDbModal.classList.add('hidden');
+    function openModal(c=null){
+      if(!requireAdmin()) return;
+      const modal=$('clientModal'), form=$('clientForm'); if(!modal||!form) return;
+      form.reset(); modalFile={nome:'',file:null,removed:false};
+      const ft=$('formFileNameText'), br=$('btnRemoveFormFile');
+      $('clientModalTitle').textContent = c ? 'Editar Registro / Cliente' : 'Nova Proposta / Cliente';
+      $('formClientId').value = c ? c.id : '';
+      if(c){
+        const sv=(i,v)=>{ $(i).value=v??''; };
+        sv('formCliente',c.cliente); sv('formProposta',c.proposta); sv('formDataProposta',c.dataProposta); sv('formPv',c.pv); sv('formDataPv',c.dataPv);
+        $('formLiberacaoFin').checked=!!c.liberacaoFin; $('formLiberacaoAdm').checked=!!c.liberacaoAdm;
+        sv('formOp',c.op); sv('formDataOp',c.dataOp); sv('formItem',c.item); sv('formValor',c.valor); sv('formDataFaturamento',c.dataFaturamento);
+        $('formDespachado').checked=!!c.despachado; sv('formDataDespacho',c.dataDespacho); sv('formPloomesLink',c.ploomesLink);
+        $('formPloomes').checked=!!c.ploomes; $('formDocSankhya').checked=!!c.docSankhya;
+        if(c.arquivoNome){ modalFile.nome=c.arquivoNome; }
+      }
+      if(ft) ft.textContent = modalFile.nome || 'Nenhum arquivo anexado';
+      br?.classList.toggle('hidden',!modalFile.nome);
+      syncOpFieldsState(); modal.classList.remove('hidden');
     }
-
-    function executeClearDatabase() {
-      if (currentUser?.email?.toLowerCase() !== 'admin@proflux.com') {
-        showToast('Apenas o Administrador Principal (admin@proflux.com) pode limpar o banco de dados.', false);
-        return;
-      }
-      records = [];
-      closeClearDbModal();
-      const cfg = document.getElementById('configModal');
-      if (cfg) cfg.classList.add('hidden');
-
-      renderHomeSearchResults();
-      renderTable();
-      updateStats();
-      showToast('Banco de dados completamente limpo!', true);
+    window.openEditModal = id => { const c=records.find(r=>r.id===id); if(c) openModal(c); };
+    function closeModal(){ $('clientModal')?.classList.add('hidden'); }
+    function exportToExcel(){
+      try{
+        if(typeof XLSX==='undefined'){ showToast('Biblioteca SheetJS indisponível.',false); return; }
+        const yn=v=>v?'SIM':'NÃO';
+        const rows=records.map(r=>({'Cliente':r.cliente,'Proposta':r.proposta,'Data Proposta':r.dataProposta,'PV':r.pv,'Data PV':r.dataPv,'Liberação Financeiro 1º':yn(r.liberacaoFin),'Liberação Adm 2º':yn(r.liberacaoAdm),'OP':r.op,'Data OP':r.dataOp,'ITEM':r.item,'Valor':r.valor||0,'Data Faturamento':r.dataFaturamento,'Status Faturamento':r.dataFaturamento?'Faturado':'Pendente','Despachado':yn(r.despachado),'Data Despacho':r.dataDespacho,'Ploomes Link':r.ploomesLink,'Ploomes Tarefa':yn(r.ploomes),'Doc Sankhya':yn(r.docSankhya),'Arquivo Anexo':r.arquivoNome}));
+        const ws=XLSX.utils.json_to_sheet(rows), wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Controle');
+        XLSX.writeFile(wb,'ProFlux_Propostas_'+new Date().toISOString().split('T')[0]+'.xlsx'); showToast('Planilha Excel exportada com sucesso!');
+      }catch(e){ console.error(e); showToast('Erro ao exportar planilha Excel.',false); }
     }
-
-    function executeRestoreDefaultData() {
-      if (currentUser?.email?.toLowerCase() !== 'admin@proflux.com') {
-        showToast('Apenas o Administrador Principal (admin@proflux.com) pode restaurar o banco de dados.', false);
-        return;
-      }
-      records = JSON.parse(JSON.stringify(INITIAL_RECORDS));
-      const cfg = document.getElementById('configModal');
-      if (cfg) cfg.classList.add('hidden');
-
-      renderHomeSearchResults();
-      renderTable();
-      updateStats();
-      showToast('Dados de exemplo restaurados com sucesso!');
-    }
-
-    function syncOpFieldsState() {
-      const finChecked = document.getElementById('formLiberacaoFin')?.checked;
-      const admChecked = document.getElementById('formLiberacaoAdm')?.checked;
-      const opInput = document.getElementById('formOp');
-      const dataOpInput = document.getElementById('formDataOp');
-      const hint = document.getElementById('opLockHint');
-
-      const isApproved = Boolean(finChecked && admChecked);
-
-      if (opInput) {
-        opInput.disabled = !isApproved;
-        if (!isApproved) {
-          opInput.value = '';
-          opInput.placeholder = 'Bloqueado (exige liberações 1º e 2º)';
-          opInput.classList.add('bg-slate-100', 'text-slate-400', 'cursor-not-allowed');
-        } else {
-          opInput.placeholder = 'Ex: OP-4401';
-          opInput.classList.remove('bg-slate-100', 'text-slate-400', 'cursor-not-allowed');
-        }
-      }
-
-      if (dataOpInput) {
-        dataOpInput.disabled = !isApproved;
-        if (!isApproved) {
-          dataOpInput.value = '';
-          dataOpInput.classList.add('bg-slate-100', 'text-slate-400', 'cursor-not-allowed');
-        } else {
-          dataOpInput.classList.remove('bg-slate-100', 'text-slate-400', 'cursor-not-allowed');
-        }
-      }
-
-      if (hint) {
-        if (isApproved) {
-          hint.innerHTML = '<span class="text-emerald-800 font-black flex items-center gap-1"><i class="ph-bold ph-lock-key-open text-orange-500"></i> Liberações concedidas: Campos de OP desbloqueados para preenchimento.</span>';
-        } else {
-          hint.innerHTML = '<span class="text-orange-800 font-black flex items-center gap-1"><i class="ph-bold ph-lock-key text-orange-600"></i> Sem liberação financeira e adm 2º: Não é gerado o número de OP nem a Data da OP.</span>';
-        }
-      }
-    }
-
-    function openModal(client = null) {
-      if (currentUser?.role === 'operador') {
-        showToast('Operadores não possuem permissão para cadastrar ou editar.', false);
-        return;
-      }
-      const modal = document.getElementById('clientModal');
-      const title = document.getElementById('clientModalTitle');
-      const form = document.getElementById('clientForm');
-      if (!modal || !form) return;
-
-      form.reset();
-      modalCurrentFile = { nome: '', data: '' };
-
-      const fileText = document.getElementById('formFileNameText');
-      const btnRemoveFile = document.getElementById('btnRemoveFormFile');
-
-      if (client) {
-        if (title) title.textContent = 'Editar Registro / Cliente';
-        document.getElementById('formClientId').value = client.id;
-        document.getElementById('formCliente').value = client.cliente || '';
-        document.getElementById('formProposta').value = client.proposta || '';
-        document.getElementById('formDataProposta').value = client.dataProposta || '';
-        document.getElementById('formPv').value = client.pv || '';
-        document.getElementById('formDataPv').value = client.dataPv || '';
-        document.getElementById('formLiberacaoFin').checked = Boolean(client.liberacaoFin);
-        document.getElementById('formLiberacaoAdm').checked = Boolean(client.liberacaoAdm);
-        document.getElementById('formOp').value = client.op || '';
-        document.getElementById('formDataOp').value = client.dataOp || '';
-        document.getElementById('formItem').value = client.item || '';
-        document.getElementById('formValor').value = client.valor !== undefined ? client.valor : '';
-        document.getElementById('formDataFaturamento').value = client.dataFaturamento || '';
-        document.getElementById('formDespachado').checked = Boolean(client.despachado);
-        document.getElementById('formDataDespacho').value = client.dataDespacho || '';
-        document.getElementById('formPloomesLink').value = client.ploomesLink || '';
-        document.getElementById('formPloomes').checked = Boolean(client.ploomes);
-        document.getElementById('formDocSankhya').checked = Boolean(client.docSankhya);
-
-        if (client.arquivoNome) {
-          modalCurrentFile = { nome: client.arquivoNome, data: client.arquivoData || '' };
-          if (fileText) fileText.textContent = client.arquivoNome;
-          if (btnRemoveFile) btnRemoveFile.classList.remove('hidden');
-        } else {
-          if (fileText) fileText.textContent = 'Nenhum arquivo anexado';
-          if (btnRemoveFile) btnRemoveFile.classList.add('hidden');
-        }
-      } else {
-        if (title) title.textContent = 'Nova Proposta / Cliente';
-        document.getElementById('formClientId').value = '';
-        if (fileText) fileText.textContent = 'Nenhum arquivo anexado';
-        if (btnRemoveFile) btnRemoveFile.classList.add('hidden');
-      }
-
-      syncOpFieldsState();
-      modal.classList.remove('hidden');
-    }
-
-    window.openEditModal = function(id) {
-      const client = records.find(r => r.id === id);
-      if (client) openModal(client);
-    };
-
-    function closeModal() {
-      const modal = document.getElementById('clientModal');
-      if (modal) modal.classList.add('hidden');
-    }
-
-    function exportToExcel() {
-      try {
-        if (typeof XLSX === 'undefined') {
-          showToast('Biblioteca SheetJS indisponível.', false);
-          return;
-        }
-
-        const dataToExport = records.map(r => ({
-          'Cliente': r.cliente || '',
-          'Proposta': r.proposta || '',
-          'Data Proposta': r.dataProposta || '',
-          'PV': r.pv || '',
-          'Data PV': r.dataPv || '',
-          'Liberação Financeiro 1º': r.liberacaoFin ? 'SIM' : 'NÃO',
-          'Liberação Adm 2º': r.liberacaoAdm ? 'SIM' : 'NÃO',
-          'OP': r.op || '',
-          'Data OP': r.dataOp || '',
-          'ITEM': r.item || '',
-          'Valor': r.valor || 0,
-          'Data Faturamento': r.dataFaturamento || '',
-          'Status Faturamento': r.dataFaturamento ? 'Faturado' : 'Pendente',
-          'Despachado': r.despachado ? 'SIM' : 'NÃO',
-          'Data Despacho': r.dataDespacho || '',
-          'Ploomes Link': r.ploomesLink || '',
-          'Ploomes Tarefa': r.ploomes ? 'SIM' : 'NÃO',
-          'Doc Sankhya': r.docSankhya ? 'SIM' : 'NÃO',
-          'Arquivo Anexo': r.arquivoNome || ''
-        }));
-
-        const ws = XLSX.utils.json_to_sheet(dataToExport);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Controle');
-        XLSX.writeFile(wb, `ProFlux_Propostas_${new Date().toISOString().split('T')[0]}.xlsx`);
-        showToast('Planilha Excel exportada com sucesso!');
-      } catch (err) {
-        console.error(err);
-        showToast('Erro ao exportar planilha Excel.', false);
-      }
-    }
-
-    function importFromExcel(file) {
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        try {
-          const data = new Uint8Array(e.target.result);
-          const workbook = XLSX.read(data, { type: 'array' });
-          const firstSheet = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[firstSheet];
-          const json = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
-
-          if (!json || json.length === 0) {
-            showToast('Nenhum dado encontrado no arquivo XLSX.', false);
-            return;
-          }
-
-          let addedCount = 0;
-          json.forEach(row => {
-            const clienteVal = row['Cliente'] || row['CLIENTE'] || row['cliente'];
-            if (!clienteVal) return;
-
-            const isSim = (val) => String(val).toUpperCase().includes('SIM') || String(val).toUpperCase().includes('ON') || String(val) === '1' || val === true;
-
-            const newRecord = {
-              id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 5),
-              cliente: String(clienteVal).trim(),
-              proposta: String(row['Proposta'] || row['PROPOSTA'] || '').trim(),
-              dataProposta: formatDateForStorage(row['Data Proposta'] || row['DATA PROPOSTA']),
-              pv: String(row['PV'] || row['Pv'] || '').trim(),
-              dataPv: formatDateForStorage(row['Data PV'] || row['DATA PV']),
-              liberacaoFin: isSim(row['Liberação Financeiro 1º'] || row['Liberacao Fin']),
-              liberacaoAdm: isSim(row['Liberação Adm 2º'] || row['Liberacao Adm']),
-              op: String(row['OP'] || row['Op'] || '').trim(),
-              dataOp: formatDateForStorage(row['Data OP'] || row['DATA OP']),
-              item: String(row['ITEM'] || row['Item'] || '').trim(),
-              valor: parseFloat(row['Valor'] || row['VALOR'] || 0) || 0,
-              dataFaturamento: formatDateForStorage(row['Data Faturamento'] || row['DATA FATURAMENTO']),
-              despachado: isSim(row['Despachado'] || row['DESPACHADO']),
-              dataDespacho: formatDateForStorage(row['Data Despacho'] || row['DATA DESPACHO']),
-              ploomesLink: String(row['Ploomes Link'] || row['PLOOMES LINK'] || '').trim(),
-              ploomes: isSim(row['Ploomes'] || row['PLOOMES']),
-              docSankhya: isSim(row['Doc Sankhya'] || row['DOC SANKHYA']),
-              arquivoNome: String(row['Arquivo Anexo'] || '').trim(),
-              arquivoData: ''
-            };
-
-            if (!newRecord.liberacaoFin || !newRecord.liberacaoAdm) {
-              newRecord.op = '';
-              newRecord.dataOp = '';
-            }
-
-            records.push(newRecord);
-            addedCount++;
+    function importFromExcel(file){
+      if(!file||!requireAdmin()) return;
+      const reader=new FileReader();
+      reader.onload=async function(e){
+        try{
+          const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+          const json=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
+          if(!json.length){ showToast('Nenhum dado encontrado no arquivo XLSX.',false); return; }
+          const sim=v=>{ const s=String(v).toUpperCase(); return s.includes('SIM')||s.includes('ON')||s==='1'||v===true; };
+          const g=(r,...ks)=>{ for(const k of ks){ if(r[k]!==undefined&&r[k]!=='') return r[k]; } return ''; };
+          const batch=[];
+          json.forEach(r=>{
+            const cli=g(r,'Cliente','CLIENTE','cliente'); if(!cli) return;
+            const rec={ cliente:String(cli).trim(), proposta:String(g(r,'Proposta','PROPOSTA')).trim(), dataProposta:formatDateForStorage(g(r,'Data Proposta','DATA PROPOSTA')), pv:String(g(r,'PV','Pv')).trim(), dataPv:formatDateForStorage(g(r,'Data PV','DATA PV')), liberacaoFin:sim(g(r,'Liberação Financeiro 1º','Liberacao Fin')), liberacaoAdm:sim(g(r,'Liberação Adm 2º','Liberacao Adm')), op:String(g(r,'OP','Op')).trim(), dataOp:formatDateForStorage(g(r,'Data OP','DATA OP')), item:String(g(r,'ITEM','Item')).trim(), valor:parseFloat(g(r,'Valor','VALOR'))||0, dataFaturamento:formatDateForStorage(g(r,'Data Faturamento','DATA FATURAMENTO')), despachado:sim(g(r,'Despachado','DESPACHADO')), dataDespacho:formatDateForStorage(g(r,'Data Despacho','DATA DESPACHO')), ploomesLink:String(g(r,'Ploomes Link','PLOOMES LINK')).trim(), ploomes:sim(g(r,'Ploomes Tarefa','Ploomes','PLOOMES')), docSankhya:sim(g(r,'Doc Sankhya','DOC SANKHYA')) };
+            if(!rec.liberacaoFin||!rec.liberacaoAdm){ rec.op=''; rec.dataOp=''; }
+            batch.push(toRow(rec));
           });
-
-          renderHomeSearchResults();
-          renderTable();
-          updateStats();
-          showToast(`${addedCount} novos registros importados com sucesso!`);
-        } catch (err) {
-          console.error(err);
-          showToast('Erro ao interpretar o arquivo XLSX.', false);
-        }
+          let added=0;
+          for(let i=0;i<batch.length;i+=200){
+            const { data, error } = await sb.from('propostas').insert(batch.slice(i,i+200)).select('*');
+            if(error){ showToast('Erro ao importar: '+error.message,false); break; }
+            added+=data.length;
+          }
+          await loadRecords(); showToast(added+' novos registros importados com sucesso!');
+        }catch(err){ console.error(err); showToast('Erro ao interpretar o arquivo XLSX.',false); }
       };
       reader.readAsArrayBuffer(file);
     }
-
-    function renderUserList() {
-      const tbody = document.getElementById('userListTableBody');
-      if (!tbody) return;
-
-      tbody.innerHTML = users.map(u => `
-        <tr class="hover:bg-orange-50/50">
-          <td class="p-2.5 font-bold text-slate-800">${escapeHtml(u.name || u.email)}</td>
-          <td class="p-2.5 font-mono text-[11px] text-slate-600">${escapeHtml(u.email)}</td>
-          <td class="p-2.5">
-            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${u.role === 'admin' ? 'bg-orange-100 text-orange-900 border border-orange-300' : 'bg-emerald-100 text-emerald-900 border border-emerald-300'}">
-              ${u.role.toUpperCase()}
-            </span>
-          </td>
-          <td class="p-2.5 text-right">
-            ${u.email !== 'admin@proflux.com' && u.id !== currentUser?.id ? `
-              <button onclick="deleteUser('${u.id}')" class="text-rose-500 hover:text-rose-700 p-1 font-bold text-xs transition-colors">
-                Excluir
-              </button>
-            ` : '<span class="text-slate-400 text-[10px] italic">Protegido</span>'}
-          </td>
-        </tr>
-      `).join('');
+    async function executeClearDatabase(){
+      if(!isMaster()){ showToast('Apenas o Administrador Principal ('+MASTER_EMAIL+') pode limpar o banco de dados.',false); return; }
+      const paths=records.map(r=>r.arquivoPath).filter(Boolean);
+      const { error } = await sb.from('propostas').delete().not('id','is',null);
+      if(error){ showToast('Erro ao limpar: '+error.message,false); return; }
+      if(paths.length) await sb.storage.from(BUCKET).remove(paths);
+      records=[]; $('clearDbConfirmModal')?.classList.add('hidden'); $('configModal')?.classList.add('hidden');
+      refreshAll(); showToast('Banco de dados completamente limpo!');
     }
-
-    window.deleteUser = function(userId) {
-      if (currentUser?.role !== 'admin') {
-        showToast('Apenas administradores podem excluir perfis de usuários.', false);
-        return;
-      }
-      users = users.filter(u => u.id !== userId);
-      renderUserList();
-      showToast('Usuário removido com sucesso.');
-    };
-
-    function escapeHtml(str) {
-      if (!str) return '';
-      return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-    }
-
-    function formatDate(val) {
-      if (!val) return '-';
-      const parts = String(val).split('-');
-      if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
-      return val;
-    }
-
-    function formatDateForStorage(val) {
-      if (!val) return '';
-      if (String(val).includes('/')) {
-        const p = String(val).split('/');
-        if (p.length === 3) return `${p[2]}-${p[1].padStart(2, '0')}-${p[0].padStart(2, '0')}`;
-      }
-      return String(val).trim();
-    }
-
-    function formatCurrency(val) {
-      if (val === undefined || val === null || isNaN(val)) return 'R$ 0,00';
-      return Number(val).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    }
-
-    window.addEventListener('DOMContentLoaded', () => {
-      loadUsers();
-      loadData();
-
-      // Força a tela de login inicial a permanecer visível sempre (Sem sessão automática)
-      currentUser = null;
-      const authGate = document.getElementById('authGateScreen');
-      if (authGate) authGate.classList.remove('hidden');
-
-      // Alternar visualização da senha (Olhinho)
-      const btnToggleGatePassword = document.getElementById('btnToggleGatePassword');
-      const gateInputPassword = document.getElementById('gateInputPassword');
-      const gatePasswordEyeIcon = document.getElementById('gatePasswordEyeIcon');
-
-      btnToggleGatePassword?.addEventListener('click', () => {
-        if (gateInputPassword.type === 'password') {
-          gateInputPassword.type = 'text';
-          gatePasswordEyeIcon.className = 'ph-bold ph-eye-slash text-lg text-orange-400';
-        } else {
-          gateInputPassword.type = 'password';
-          gatePasswordEyeIcon.className = 'ph-bold ph-eye text-lg text-emerald-400';
-        }
-      });
-
-      // Login obrigatório na tela inicial
-      const gateLoginForm = document.getElementById('gateLoginForm');
-      const gateLoginError = document.getElementById('gateLoginError');
-
-      gateLoginForm?.addEventListener('submit', (e) => {
+    (function init(){
+      const on=(id,ev,fn)=>$(id)?.addEventListener(ev,fn);
+      const box=$('adminUserCreationBox');
+      if(box) box.innerHTML='<p class="text-xs font-bold text-orange-950">Novos usuários</p><p class="text-xs text-orange-900">Crie o acesso em Supabase → Authentication → Users → Add user (marque Auto Confirm User). O perfil aparece aqui como Operador e você pode promover a Administrador na lista abaixo.</p>';
+      $('btnRestoreDefaultData')?.classList.add('hidden');
+      on('btnToggleGatePassword','click',()=>{ const p=$('gateInputPassword'), ic=$('gatePasswordEyeIcon'); const show=p.type==='password'; p.type=show?'text':'password'; ic.className=show?'ph-bold ph-eye-slash text-lg text-orange-400':'ph-bold ph-eye text-lg text-emerald-400'; });
+      on('gateLoginForm','submit',async e=>{
         e.preventDefault();
-        const email = document.getElementById('gateInputEmail')?.value.trim().toLowerCase();
-        const pass = document.getElementById('gateInputPassword')?.value.trim();
-
-        const foundUser = users.find(u => u.email.toLowerCase() === email && u.password === pass);
-        if (foundUser) {
-          currentUser = foundUser;
-          if (authGate) authGate.classList.add('hidden');
-          gateLoginError?.classList.add('hidden');
-          
-          // Limpa os campos do formulário para não deixar senhas gravadas na tela
-          document.getElementById('gateInputEmail').value = '';
-          document.getElementById('gateInputPassword').value = '';
-
-          updateUserUI();
-          renderHomeSearchResults();
-          renderTable();
-          updateStats();
-          showToast(`Acesso concedido. Bem-vindo(a), ${currentUser.name}!`);
-        } else {
-          if (gateLoginError) {
-            gateLoginError.classList.remove('hidden');
+        const email=$('gateInputEmail').value.trim().toLowerCase(), pass=$('gateInputPassword').value;
+        const btn=e.target.querySelector('button[type=submit]'); if(btn) btn.disabled=true;
+        const { data, error } = await sb.auth.signInWithPassword({email,password:pass});
+        if(btn) btn.disabled=false;
+        if(error||!data?.session){ $('gateLoginError')?.classList.remove('hidden'); return; }
+        $('gateInputEmail').value=''; $('gateInputPassword').value='';
+        await startSession(data.session);
+      });
+      on('btnLogout','click',async()=>{ $('userDropdownMenu')?.classList.add('hidden'); await sb.auth.signOut(); showToast('Sessão encerrada com sucesso.'); });
+      on('logoHomeBtn','click',()=>switchView('home'));
+      on('btnGoToProposalsFromHero','click',()=>switchView('proposals'));
+      on('btnBackToHome','click',()=>switchView('home'));
+      const hs=$('homeSearchInput'), bch=$('btnClearHomeSearch');
+      hs?.addEventListener('input',e=>{ homeSearchQuery=e.target.value; bch?.classList.toggle('hidden',!homeSearchQuery.length); renderHomeSearchResults(); });
+      bch?.addEventListener('click',()=>{ if(hs) hs.value=''; homeSearchQuery=''; bch.classList.add('hidden'); renderHomeSearchResults(); });
+      window.addEventListener('click',e=>{ const dd=$('homeSearchResultsDropdown'); if(dd && !dd.contains(e.target) && e.target!==hs) dd.classList.add('hidden'); });
+      on('btnOpenNewClientModal','click',()=>openModal());
+      on('btnCloseClientModal','click',closeModal); on('btnCancelClientModal','click',closeModal);
+      on('formLiberacaoFin','change',syncOpFieldsState); on('formLiberacaoAdm','change',syncOpFieldsState);
+      const ffi=$('formFileInput');
+      on('btnUploadFormFileTrigger','click',()=>ffi?.click());
+      ffi?.addEventListener('change',e=>{
+        const f=e.target.files?.[0]; if(!f) return;
+        if(f.size>3*1024*1024){ showToast('O arquivo selecionado deve ter no máximo 3MB.',false); ffi.value=''; return; }
+        modalFile={nome:f.name,file:f,removed:false}; $('formFileNameText').textContent=f.name; $('btnRemoveFormFile').classList.remove('hidden');
+      });
+      on('btnRemoveFormFile','click',()=>{ modalFile={nome:'',file:null,removed:true}; if(ffi) ffi.value=''; $('formFileNameText').textContent='Nenhum arquivo anexado'; $('btnRemoveFormFile').classList.add('hidden'); });
+      on('clientForm','submit',async e=>{
+        e.preventDefault(); if(!requireAdmin()) return;
+        const id=$('formClientId').value, fin=$('formLiberacaoFin').checked, adm=$('formLiberacaoAdm').checked;
+        let op=$('formOp').value.trim(), dop=$('formDataOp').value;
+        if((!fin||!adm)&&(op||dop)){ showToast('Sem liberação financeira (1º) e adm (2º), a OP não pode ser gerada.',false); op=''; dop=''; }
+        const payload={ cliente:$('formCliente').value.trim(), proposta:$('formProposta').value.trim(), dataProposta:$('formDataProposta').value, pv:$('formPv').value.trim(), dataPv:$('formDataPv').value, liberacaoFin:fin, liberacaoAdm:adm, op, dataOp:dop, item:$('formItem').value.trim(), valor:parseFloat($('formValor').value)||0, dataFaturamento:$('formDataFaturamento').value, despachado:$('formDespachado').checked, dataDespacho:$('formDataDespacho').value, ploomesLink:$('formPloomesLink').value.trim(), ploomes:$('formPloomes').checked, docSankhya:$('formDocSankhya').checked };
+        try{
+          if(id){
+            const rec=records.find(r=>r.id===id); const arq={};
+            if(modalFile.file){ const path=await uploadFile(id,modalFile.file); await removeFile(rec.arquivoPath); arq.arquivoNome=modalFile.nome; arq.arquivoPath=path; }
+            else if(modalFile.removed){ await removeFile(rec.arquivoPath); arq.arquivoNome=''; arq.arquivoPath=''; }
+            if(!(await patchRecord(id,{...payload,...arq}))) return;
+          } else {
+            const { data, error } = await sb.from('propostas').insert(toRow(payload)).select('*').single();
+            if(error) throw error;
+            const rec=fromRow(data); if(!records.find(r=>r.id===rec.id)) records.unshift(rec);
+            if(modalFile.file){ const path=await uploadFile(rec.id,modalFile.file); await patchRecord(rec.id,{arquivoNome:modalFile.nome,arquivoPath:path}); }
           }
-        }
+          closeModal(); refreshAll(); showToast('Proposta salva com sucesso!');
+        }catch(err){ showToast('Erro ao salvar: '+err.message,false); }
       });
-
-      // Clique no Símbolo / Logo ProFlux volta para o Início
-      document.getElementById('logoHomeBtn')?.addEventListener('click', () => switchView('home'));
-      document.getElementById('btnGoToProposalsFromHero')?.addEventListener('click', () => switchView('proposals'));
-      document.getElementById('btnBackToHome')?.addEventListener('click', () => switchView('home'));
-
-      // Busca na Tela Inicial
-      const homeSearch = document.getElementById('homeSearchInput');
-      const btnClearHome = document.getElementById('btnClearHomeSearch');
-      homeSearch?.addEventListener('input', (e) => {
-        homeSearchQuery = e.target.value;
-        if (homeSearchQuery.length > 0) {
-          btnClearHome?.classList.remove('hidden');
-        } else {
-          btnClearHome?.classList.add('hidden');
-        }
-        renderHomeSearchResults();
+      on('btnApplyPanelDateFilter','click',()=>{ panelFilterStart=$('panelDateStart')?.value||''; panelFilterEnd=$('panelDateEnd')?.value||''; renderTable(); updateStats(); showToast('Filtro de período aplicado.'); });
+      on('btnClearPanelDateFilter','click',()=>{ panelFilterStart=''; panelFilterEnd=''; if($('panelDateStart')) $('panelDateStart').value=''; if($('panelDateEnd')) $('panelDateEnd').value=''; renderTable(); updateStats(); showToast('Filtro de período limpo.'); });
+      on('panelSearchInput','input',e=>{ panelSearchQuery=e.target.value; renderTable(); updateStats(); });
+      on('btnCloseDetailModal','click',closeDetailModal); on('btnCloseDetailModalBottom','click',closeDetailModal);
+      on('btnTriggerClearDatabase','click',()=>{ if(!isMaster()){ showToast('Apenas o Administrador Principal ('+MASTER_EMAIL+') pode limpar o banco de dados.',false); return; } $('clearDbConfirmModal')?.classList.remove('hidden'); });
+      on('btnCancelClearDbModal','click',()=>$('clearDbConfirmModal')?.classList.add('hidden'));
+      on('btnConfirmClearDbAction','click',executeClearDatabase);
+      const dropMenu=$('userDropdownMenu'), cfg=$('configModal'), prof=$('profileModal'), pwd=$('changePasswordModal');
+      on('userDropdownTrigger','click',e=>{ e.stopPropagation(); dropMenu?.classList.toggle('hidden'); });
+      window.addEventListener('click',()=>dropMenu?.classList.add('hidden'));
+      on('btnOpenConfigModalFromDropdown','click',()=>{ dropMenu?.classList.add('hidden'); cfg?.classList.remove('hidden'); });
+      on('btnCloseConfigModal','click',()=>cfg?.classList.add('hidden')); on('btnCloseConfigModalBottom','click',()=>cfg?.classList.add('hidden'));
+      on('btnOpenProfileModal','click',()=>{ dropMenu?.classList.add('hidden'); loadUsers(); updateUserUI(); prof?.classList.remove('hidden'); });
+      on('btnCloseProfileModal','click',()=>prof?.classList.add('hidden')); on('btnCloseProfileModalBottom','click',()=>prof?.classList.add('hidden'));
+      on('profilePhotoInput','change',async e=>{
+        const f=e.target.files?.[0]; if(!f||!currentUser) return;
+        try{
+          const foto=await resizeImage(f);
+          const { error } = await sb.from('profiles').update({foto}).eq('id',currentUser.id);
+          if(error) throw error;
+          currentUser.photo=foto; updateUserUI(); loadUsers(); showToast('Foto de perfil atualizada!');
+        }catch(err){ showToast('Erro ao salvar foto: '+(err.message||err),false); }
       });
-
-      btnClearHome?.addEventListener('click', () => {
-        if (homeSearch) homeSearch.value = '';
-        homeSearchQuery = '';
-        btnClearHome.classList.add('hidden');
-        renderHomeSearchResults();
+      on('btnSaveProfileName','click',async()=>{
+        const nome=$('profileNameInput')?.value.trim(); if(!nome){ showToast('Informe um nome válido.',false); return; }
+        const { error } = await sb.from('profiles').update({nome}).eq('id',currentUser.id);
+        if(error){ showToast('Erro ao salvar nome: '+error.message,false); return; }
+        currentUser.name=nome; updateUserUI(); loadUsers(); showToast('Nome atualizado com sucesso!');
       });
-
-      window.addEventListener('click', (e) => {
-        const dropdown = document.getElementById('homeSearchResultsDropdown');
-        if (dropdown && !dropdown.contains(e.target) && e.target !== homeSearch) {
-          dropdown.classList.add('hidden');
-        }
-      });
-
-      // Botão Nova Proposta
-      document.getElementById('btnOpenNewClientModal')?.addEventListener('click', () => openModal());
-      document.getElementById('btnCloseClientModal')?.addEventListener('click', closeModal);
-      document.getElementById('btnCancelClientModal')?.addEventListener('click', closeModal);
-
-      // Ouvintes de Liberação no Modal para Travar/Destravar OP
-      document.getElementById('formLiberacaoFin')?.addEventListener('change', syncOpFieldsState);
-      document.getElementById('formLiberacaoAdm')?.addEventListener('change', syncOpFieldsState);
-
-      // Anexo de Arquivo dentro do Modal de Cadastro
-      const formFileInput = document.getElementById('formFileInput');
-      const btnUploadFormFileTrigger = document.getElementById('btnUploadFormFileTrigger');
-      const formFileNameText = document.getElementById('formFileNameText');
-      const btnRemoveFormFile = document.getElementById('btnRemoveFormFile');
-
-      btnUploadFormFileTrigger?.addEventListener('click', () => formFileInput?.click());
-
-      formFileInput?.addEventListener('change', (e) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        if (file.size > 3 * 1024 * 1024) {
-          showToast('O arquivo selecionado deve ter no máximo 3MB.', false);
-          return;
-        }
-
-        const reader = new FileReader();
-        reader.onload = (uploadEvt) => {
-          modalCurrentFile = { nome: file.name, data: uploadEvt.target.result };
-          if (formFileNameText) formFileNameText.textContent = file.name;
-          if (btnRemoveFormFile) btnRemoveFormFile.classList.remove('hidden');
-        };
-        reader.readAsDataURL(file);
-      });
-
-      btnRemoveFormFile?.addEventListener('click', () => {
-        modalCurrentFile = { nome: '', data: '' };
-        if (formFileInput) formFileInput.value = '';
-        if (formFileNameText) formFileNameText.textContent = 'Nenhum arquivo anexado';
-        btnRemoveFormFile.classList.add('hidden');
-      });
-
-      // Submissão do Formulário de Cliente
-      document.getElementById('clientForm')?.addEventListener('submit', (e) => {
+      on('btnExportXLSX','click',exportToExcel);
+      const ix=$('inputXLSXFile');
+      on('btnUploadXLSXTrigger','click',()=>ix?.click());
+      ix?.addEventListener('change',e=>{ if(e.target.files?.[0]){ importFromExcel(e.target.files[0]); e.target.value=''; } });
+      const openPwd=()=>{ dropMenu?.classList.add('hidden'); cfg?.classList.add('hidden'); prof?.classList.add('hidden'); pwd?.classList.remove('hidden'); };
+      on('btnTriggerChangePasswordFromProfile','click',openPwd);
+      on('btnCloseChangePasswordModal','click',()=>pwd?.classList.add('hidden')); on('btnCancelChangePassword','click',()=>pwd?.classList.add('hidden'));
+      on('changePasswordForm','submit',async e=>{
         e.preventDefault();
-
-        const id = document.getElementById('formClientId').value;
-        const finLiberado = document.getElementById('formLiberacaoFin').checked;
-        const admLiberado = document.getElementById('formLiberacaoAdm').checked;
-
-        let opVal = document.getElementById('formOp').value.trim();
-        let dataOpVal = document.getElementById('formDataOp').value;
-
-        if ((!finLiberado || !admLiberado) && (opVal || dataOpVal)) {
-          showToast('Sem liberação financeira (1º) e adm (2º), a OP não pode ser gerada.', false);
-          opVal = '';
-          dataOpVal = '';
-        }
-
-        const payload = {
-          cliente: document.getElementById('formCliente').value.trim(),
-          proposta: document.getElementById('formProposta').value.trim(),
-          dataProposta: document.getElementById('formDataProposta').value,
-          pv: document.getElementById('formPv').value.trim(),
-          dataPv: document.getElementById('formDataPv').value,
-          liberacaoFin: finLiberado,
-          liberacaoAdm: admLiberado,
-          op: opVal,
-          dataOp: dataOpVal,
-          item: document.getElementById('formItem').value.trim(),
-          valor: parseFloat(document.getElementById('formValor').value) || 0,
-          dataFaturamento: document.getElementById('formDataFaturamento').value,
-          despachado: document.getElementById('formDespachado').checked,
-          dataDespacho: document.getElementById('formDataDespacho').value,
-          ploomesLink: document.getElementById('formPloomesLink').value.trim(),
-          ploomes: document.getElementById('formPloomes').checked,
-          docSankhya: document.getElementById('formDocSankhya').checked,
-          arquivoNome: modalCurrentFile.nome,
-          arquivoData: modalCurrentFile.data
-        };
-
-        if (id) {
-          const idx = records.findIndex(r => r.id === id);
-          if (idx !== -1) {
-            records[idx] = { ...records[idx], ...payload };
-          }
-        } else {
-          records.unshift({
-            id: Date.now().toString(),
-            ...payload
-          });
-        }
-
-        closeModal();
-        renderHomeSearchResults();
-        renderTable();
-        updateStats();
-        showToast('Proposta salva com sucesso!');
+        const n1=$('inputNewPassword').value, n2=$('inputConfirmPassword').value;
+        if(n1!==n2){ showToast('As senhas não coincidem.',false); return; }
+        if(n1.length<6){ showToast('A senha deve ter no mínimo 6 caracteres.',false); return; }
+        const { error } = await sb.auth.updateUser({password:n1});
+        if(error){ showToast('Erro ao alterar senha: '+error.message,false); return; }
+        $('inputNewPassword').value=''; $('inputConfirmPassword').value=''; pwd?.classList.add('hidden'); showToast('Senha alterada com sucesso!');
       });
-
-      // Filtro por Período na Planilha
-      document.getElementById('btnApplyPanelDateFilter')?.addEventListener('click', () => {
-        panelFilterStart = document.getElementById('panelDateStart')?.value || '';
-        panelFilterEnd = document.getElementById('panelDateEnd')?.value || '';
-        renderTable();
-        updateStats();
-        showToast('Filtro de período aplicado.');
-      });
-
-      document.getElementById('btnClearPanelDateFilter')?.addEventListener('click', () => {
-        panelFilterStart = '';
-        panelFilterEnd = '';
-        if (document.getElementById('panelDateStart')) document.getElementById('panelDateStart').value = '';
-        if (document.getElementById('panelDateEnd')) document.getElementById('panelDateEnd').value = '';
-        renderTable();
-        updateStats();
-        showToast('Filtro de período limpo.');
-      });
-
-      // Busca na Planilha
-      document.getElementById('panelSearchInput')?.addEventListener('input', (e) => {
-        panelSearchQuery = e.target.value;
-        renderTable();
-        updateStats();
-      });
-
-      // Fechamento da Ficha Detalhada
-      document.getElementById('btnCloseDetailModal')?.addEventListener('click', closeDetailModal);
-      document.getElementById('btnCloseDetailModalBottom')?.addEventListener('click', closeDetailModal);
-
-      // Limpeza de Banco de Dados
-      document.getElementById('btnTriggerClearDatabase')?.addEventListener('click', openClearDbModal);
-      document.getElementById('btnCancelClearDbModal')?.addEventListener('click', closeClearDbModal);
-      document.getElementById('btnConfirmClearDbAction')?.addEventListener('click', executeClearDatabase);
-      document.getElementById('btnRestoreDefaultData')?.addEventListener('click', executeRestoreDefaultData);
-
-      // Modais e Menu do Usuário
-      const configModal = document.getElementById('configModal');
-      const profileModal = document.getElementById('profileModal');
-      const dropTrigger = document.getElementById('userDropdownTrigger');
-      const dropMenu = document.getElementById('userDropdownMenu');
-
-      dropTrigger?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        dropMenu?.classList.toggle('hidden');
-      });
-      window.addEventListener('click', () => dropMenu?.classList.add('hidden'));
-
-      // Configurações
-      document.getElementById('btnOpenConfigModalFromDropdown')?.addEventListener('click', () => {
-        dropMenu?.classList.add('hidden');
-        configModal?.classList.remove('hidden');
-      });
-      document.getElementById('btnCloseConfigModal')?.addEventListener('click', () => configModal?.classList.add('hidden'));
-      document.getElementById('btnCloseConfigModalBottom')?.addEventListener('click', () => configModal?.classList.add('hidden'));
-
-      // Perfil
-      document.getElementById('btnOpenProfileModal')?.addEventListener('click', () => {
-        dropMenu?.classList.add('hidden');
-        renderUserList();
-        updateUserUI();
-        profileModal?.classList.remove('hidden');
-      });
-      document.getElementById('btnCloseProfileModal')?.addEventListener('click', () => profileModal?.classList.add('hidden'));
-      document.getElementById('btnCloseProfileModalBottom')?.addEventListener('click', () => profileModal?.classList.add('hidden'));
-
-      // Upload de Foto de Perfil
-      document.getElementById('profilePhotoInput')?.addEventListener('change', (e) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        if (file.size > 2 * 1024 * 1024) {
-          showToast('A foto deve ter no máximo 2MB.', false);
-          return;
-        }
-
-        const reader = new FileReader();
-        reader.onload = function(evt) {
-          currentUser.photo = evt.target.result;
-          const uIdx = users.findIndex(u => u.email === currentUser.email);
-          if (uIdx !== -1) users[uIdx].photo = evt.target.result;
-          updateUserUI();
-          renderUserList();
-          showToast('Foto de perfil atualizada!');
-        };
-        reader.readAsDataURL(file);
-      });
-
-      // Salvar Nome de Perfil
-      document.getElementById('btnSaveProfileName')?.addEventListener('click', () => {
-        const newName = document.getElementById('profileNameInput')?.value.trim();
-        if (!newName) {
-          showToast('Informe um nome válido.', false);
-          return;
-        }
-        currentUser.name = newName;
-        const uIdx = users.findIndex(u => u.email === currentUser.email);
-        if (uIdx !== -1) users[uIdx].name = newName;
-        updateUserUI();
-        renderUserList();
-        showToast('Nome atualizado com sucesso!');
-      });
-
-      // Exportação / Importação XLSX
-      document.getElementById('btnExportXLSX')?.addEventListener('click', exportToExcel);
-      const inputXLSX = document.getElementById('inputXLSXFile');
-      document.getElementById('btnUploadXLSXTrigger')?.addEventListener('click', () => inputXLSX?.click());
-      inputXLSX?.addEventListener('change', (e) => {
-        if (e.target.files?.[0]) {
-          importFromExcel(e.target.files[0]);
-          e.target.value = '';
-        }
-      });
-
-      // Criação de Novo Usuário (Admin)
-      document.getElementById('btnCreateNewUser')?.addEventListener('click', () => {
-        if (currentUser?.role !== 'admin') {
-          showToast('Apenas administradores podem cadastrar novos acessos.', false);
-          return;
-        }
-        const name = document.getElementById('newUserNameInput')?.value.trim();
-        const email = document.getElementById('newUserEmailInput')?.value.trim().toLowerCase();
-        const pass = document.getElementById('newUserPasswordInput')?.value.trim();
-        const role = document.getElementById('newUserRoleSelect')?.value;
-
-        if (!name || !email || !pass) {
-          showToast('Preencha nome, e-mail e senha.', false);
-          return;
-        }
-
-        if (users.find(x => x.email.toLowerCase() === email)) {
-          showToast('Já existe um usuário cadastrado com este e-mail.', false);
-          return;
-        }
-
-        const newUser = {
-          id: 'u_' + Date.now().toString(),
-          name,
-          email,
-          password: pass,
-          role,
-          photo: ''
-        };
-
-        users.push(newUser);
-        renderUserList();
-        document.getElementById('newUserNameInput').value = '';
-        document.getElementById('newUserEmailInput').value = '';
-        document.getElementById('newUserPasswordInput').value = '';
-        showToast(`Usuário ${name} cadastrado com sucesso!`);
-      });
-
-      // Alteração de Senha
-      const pwdModal = document.getElementById('changePasswordModal');
-      const openPwdModal = () => {
-        dropMenu?.classList.add('hidden');
-        configModal?.classList.add('hidden');
-        profileModal?.classList.add('hidden');
-        pwdModal?.classList.remove('hidden');
-      };
-
-      document.getElementById('btnTriggerChangePasswordFromProfile')?.addEventListener('click', openPwdModal);
-      document.getElementById('btnCloseChangePasswordModal')?.addEventListener('click', () => pwdModal?.classList.add('hidden'));
-      document.getElementById('btnCancelChangePassword')?.addEventListener('click', () => pwdModal?.classList.add('hidden'));
-
-      document.getElementById('changePasswordForm')?.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const n1 = document.getElementById('inputNewPassword')?.value;
-        const n2 = document.getElementById('inputConfirmPassword')?.value;
-
-        if (n1 !== n2) {
-          showToast('As senhas não coincidem.', false);
-          return;
-        }
-
-        const userIdx = users.findIndex(u => u.email === currentUser.email);
-        if (userIdx !== -1) {
-          users[userIdx].password = n1;
-          currentUser.password = n1;
-          pwdModal?.classList.add('hidden');
-          showToast('Senha alterada com sucesso!');
-        }
-      });
-
-      // Encerrar Sessão (Sair)
-      document.getElementById('btnLogout')?.addEventListener('click', () => {
-        currentUser = null;
-        dropMenu?.classList.add('hidden');
-        if (authGate) authGate.classList.remove('hidden');
-        document.getElementById('gateInputEmail').value = '';
-        document.getElementById('gateInputPassword').value = '';
-        showToast('Sessão encerrada com sucesso.');
-      });
-
-      updateStats();
-      renderHomeSearchResults();
-      renderTable();
-    });
-  </script>
-</body>
-</html>
+      sb.auth.onAuthStateChange(ev=>{ if(ev==='SIGNED_OUT') endSession(); });
+      sb.auth.getSession().then(({data})=>{ if(data?.session) startSession(data.session); });
+      updateStats(); renderTable();
+    })();
+</script>
+</body>body>
+</html>html>
